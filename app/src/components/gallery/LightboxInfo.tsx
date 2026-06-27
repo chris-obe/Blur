@@ -1,23 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, AlertTriangle, Ban } from 'lucide-react';
-import { FORMATS, cropFactor, type Format } from '../../lib/engine';
+import { FORMATS, cropFactor, diagonal, type Format } from '../../lib/engine';
 import { computeMatch } from '../../lib/match';
 import { useKit } from '../../store/KitProvider';
 import type { ViewEntry } from '../../lib/types';
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
-function Stat({ label, value }: { label: string; value: string }) {
+// Optical "type" designation from the sensor diagonal (1" optical format ≈ 16mm
+// diagonal). Small sensors read as 1/x″ (phones, compacts); larger ones as x″.
+function sensorType(diagMm: number): string {
+  const inches = diagMm / 16;
+  return inches >= 1 ? `${inches.toFixed(1)}″` : `1/${(1 / inches).toFixed(1)}″`;
+}
+
+// e.g. "Type 1/3.6″ (12.0 mm²)"
+function sensorLabel(fmt: Format): string {
+  const area = fmt.w * fmt.h;
+  return `Type ${sensorType(diagonal(fmt))} (${area.toFixed(1)} mm²)`;
+}
+
+function Stat({ label, value, span }: { label: string; value: string; span?: boolean }) {
   return (
-    <div className="border border-line px-3 py-2">
+    <div className={['border border-line px-3 py-2', span ? 'col-span-3' : ''].join(' ')}>
       <div className="label mb-1">{label}</div>
       <div className="text-sm font-bold tabular-nums">{value}</div>
     </div>
   );
 }
 
-// The optical panel inside the lightbox. Editable source (correct EXIF guesses),
-// resets whenever the viewed entry changes.
+// The optical panel inside the lightbox. The format can be corrected (EXIF
+// guesses), and everything recomputes live; resets when the viewed entry changes.
 export function LightboxInfo({ entry }: { entry: ViewEntry }) {
   const { kit } = useKit();
   const [format, setFormat] = useState<Format>(entry.format);
@@ -54,64 +67,28 @@ export function LightboxInfo({ entry }: { entry: ViewEntry }) {
         <div className="label mt-1">{entry.metaLine}</div>
       </div>
 
+      {/* Source — correct the format if the guess is off; the rest is derived */}
       <div>
-        <div className="label mb-2">Source {entry.guessed && '· format guessed, confirm'}</div>
+        <div className="label mb-2">Source {entry.guessed && '· confirm format'}</div>
+        <select
+          value={format.id}
+          onChange={(e) => {
+            const next = options.find((f) => f.id === e.target.value);
+            if (next) setFormat(next);
+          }}
+          className="mb-2 w-full border border-line bg-transparent px-2 py-1.5 text-xs outline-none focus:border-line-strong"
+        >
+          {options.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
         <div className="grid grid-cols-3 gap-2">
-          <label className="flex flex-col gap-1">
-            <span className="label">Format</span>
-            <select
-              value={format.id}
-              onChange={(e) => {
-                const next = options.find((f) => f.id === e.target.value);
-                if (next) setFormat(next);
-              }}
-              className="border border-line bg-transparent px-2 py-1.5 text-xs outline-none focus:border-line-strong"
-            >
-              {options.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="label">Focal</span>
-            <input
-              type="number"
-              value={focal}
-              min={1}
-              onChange={(e) => setFocal(Math.max(1, +e.target.value || 0))}
-              className="border border-line bg-transparent px-2 py-1.5 text-xs outline-none focus:border-line-strong"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="label">ƒ/</span>
-            <input
-              type="number"
-              value={aperture}
-              step={0.1}
-              min={0.7}
-              onChange={(e) => setAperture(Math.max(0.7, +e.target.value || 0))}
-              className="border border-line bg-transparent px-2 py-1.5 text-xs outline-none focus:border-line-strong"
-            />
-          </label>
-        </div>
-      </div>
-
-      {/* the two headline calculated numbers */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="border border-line-strong p-4">
-          <div className="label mb-2">Sensor</div>
-          <div className="text-xl font-bold tracking-tight tabular-nums">
-            {format.w} × {format.h}
-            <span className="text-xs font-normal text-muted"> mm</span>
-          </div>
-        </div>
-        <div className="border border-line-strong p-4">
-          <div className="label mb-2">Crop factor</div>
-          <div className="text-xl font-bold tracking-tight tabular-nums">
-            {cropFactor(format).toFixed(2)}×
-          </div>
+          <Stat label="Focal length" value={`${Math.round(focal)} mm`} />
+          <Stat label="Aperture" value={`ƒ/${aperture.toFixed(1)}`} />
+          <Stat label="Field of view" value={`${Math.round(m.fov.h)}°`} />
+          <Stat label="Sensor size" value={sensorLabel(format)} span />
         </div>
       </div>
 
@@ -122,10 +99,9 @@ export function LightboxInfo({ entry }: { entry: ViewEntry }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <Stat label="FOV h" value={`${r1(m.fov.h)}°`} />
-        <Stat label="FOV v" value={`${r1(m.fov.v)}°`} />
-        <Stat label="Bg blur" value={`${r1(m.blurFar)}%`} />
+      <div className="grid grid-cols-2 gap-2">
+        <Stat label="Crop factor" value={`${cropFactor(format).toFixed(2)}×`} />
+        <Stat label="Bg blur (50 m)" value={`${r1(m.blurFar)}%`} />
       </div>
 
       <div className={['border p-4', inverted ? 'border-line-strong bg-fg text-bg' : 'border-line'].join(' ')}>
