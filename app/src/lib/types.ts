@@ -41,6 +41,20 @@ export interface ExtractedExif {
   formatId: string; // best-guess engine format id
 }
 
+// A single viewable thing in the lightbox — built from either a gallery item or
+// an uploaded image. `morph` controls whether it animates from a grid thumbnail.
+export interface ViewEntry {
+  id: string; // layoutId key = `photo-${id}`
+  title: string;
+  metaLine: string;
+  src: string;
+  formatId: string;
+  focal: number;
+  aperture: number;
+  guessed: boolean;
+  morph: boolean;
+}
+
 export type KitVerdict =
   | { status: 'covered'; lens: Lens; note: string }
   | { status: 'partial'; lens: Lens; note: string }
