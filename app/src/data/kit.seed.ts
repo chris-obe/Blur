@@ -1,37 +1,28 @@
-import type { Lens } from '../lib/types';
+import type { Kit, OwnedCamera, OwnedLens } from '../lib/types';
 
-export const KIT_SEED: Lens[] = [
-  {
-    id: 'k-50-18',
-    name: '50mm ƒ/1.8',
-    type: 'prime',
-    focalMin: 50,
-    focalMax: 50,
-    apMax: 1.8,
-    apMin: 22,
-    mount: 'E',
-    formatId: 'ff',
-  },
-  {
-    id: 'k-2470-28',
-    name: '24–70mm ƒ/2.8',
-    type: 'zoom',
-    focalMin: 24,
-    focalMax: 70,
-    apMax: 2.8,
-    apMin: 22,
-    mount: 'E',
-    formatId: 'ff',
-  },
-  {
-    id: 'k-35-2',
-    name: '35mm ƒ/2',
-    type: 'prime',
-    focalMin: 35,
-    focalMax: 35,
-    apMax: 2,
-    apMin: 16,
-    mount: 'E',
-    formatId: 'ff',
-  },
-];
+// A small starter kit so the verdict + Compare "From Kit" have something to
+// work with. Users edit it on the My Kit screen (persisted to localStorage).
+const a7iv: OwnedCamera = {
+  id: 'seed-cam-a7iv',
+  catalogId: 'sony-a7iv',
+  name: 'Sony α7 IV',
+  maker: 'Sony',
+  mount: 'E',
+  formatId: 'ff',
+};
+
+const lens = (
+  id: string, catalogId: string, name: string, type: 'prime' | 'zoom',
+  focalMin: number, focalMax: number, apMax: number,
+): OwnedLens => ({
+  id, catalogId, name, maker: 'Sony', type, focalMin, focalMax, apMax, apMin: 22,
+  mount: 'E', coversFormatIds: ['ff', 'apsc', 'apsc-canon', 'film-135'], af: true,
+});
+
+export const KIT_SEED: Kit = {
+  cameras: [a7iv],
+  lenses: [
+    lens('seed-lens-50', 'sony-fe-50-14gm', 'Sony FE 50mm F1.4 GM', 'prime', 50, 50, 1.4),
+    lens('seed-lens-2470', 'sony-fe-2470gm2', 'Sony FE 24-70mm F2.8 GM II', 'zoom', 24, 70, 2.8),
+  ],
+};

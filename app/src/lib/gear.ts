@@ -37,6 +37,15 @@ export function cameraFormat(cam: Camera): Format {
   return getFormat(cam.formatId);
 }
 
+// Friendly names for mount codes, for the kit's mount group headers.
+export const MOUNT_LABELS: Record<string, string> = {
+  E: 'Sony E', RF: 'Canon RF', Z: 'Nikon Z', L: 'L-Mount', X: 'Fujifilm X',
+  G: 'Fujifilm G', MFT: 'Micro Four Thirds', M: 'Leica M', EF: 'Canon EF',
+  F: 'Nikon F', K: 'Pentax K', A: 'Sony / Minolta A', HV: 'Hasselblad V',
+  M645: 'Mamiya 645', P67: 'Pentax 67',
+};
+export const mountLabel = (mount: string): string => MOUNT_LABELS[mount] ?? mount;
+
 // Lenses available for a body: right mount AND its image circle covers the
 // body's sensor format. Sorted by maker then focal for a sane dropdown.
 export function lensesForCamera(cam: Camera, lenses: CatalogLens[]): CatalogLens[] {
@@ -48,4 +57,16 @@ export function lensesForCamera(cam: Camera, lenses: CatalogLens[]): CatalogLens
 // A sensible default focal for a lens (primes: the focal; zooms: the wide end).
 export function defaultFocal(l: CatalogLens): number {
   return l.focalMin;
+}
+
+// Lenses for a mount whose image circle covers at least one of the given sensor
+// formats (the formats of the bodies owned on that mount). Sorted maker, focal.
+export function lensesForMount(
+  mount: string,
+  formatIds: Set<string>,
+  lenses: CatalogLens[],
+): CatalogLens[] {
+  return lenses
+    .filter((l) => l.mounts.includes(mount) && l.coversFormatIds.some((f) => formatIds.has(f)))
+    .sort((a, b) => a.maker.localeCompare(b.maker) || a.focalMin - b.focalMin);
 }

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@auth0/auth0-react": "^2.19.0",
     "@visx/axis": "^4.0.0",
     "@visx/event": "^4.0.0",
     "@visx/group": "^4.0.0",

@@ -60,7 +60,7 @@ export function DropdownItem({ children, onClick }: { children: ReactNode; onCli
     <button
       type="button"
       onClick={onClick}
-      className="block w-full px-3 py-2 text-left text-xs tracking-wide hover:bg-faint"
+      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs tracking-wide hover:bg-faint"
     >
       {children}
     </button>

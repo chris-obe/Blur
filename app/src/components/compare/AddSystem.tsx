@@ -17,7 +17,6 @@ const fieldCls =
 
 export function AddSystem() {
   const { add, systems } = useCompare();
-  const { kit } = useKit();
   const [mode, setMode] = useState<Mode>('camera');
 
   const full = systems.length >= 4;
@@ -45,7 +44,7 @@ export function AddSystem() {
         ) : mode === 'camera' ? (
           <CameraMode onAdd={add} />
         ) : mode === 'kit' ? (
-          <KitMode onAdd={add} kit={kit} />
+          <KitMode onAdd={add} />
         ) : (
           <ManualMode onAdd={add} />
         )}
@@ -144,46 +143,76 @@ function CameraMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
   );
 }
 
-function KitMode({ onAdd, kit }: { onAdd: (s: CompareSystem) => void; kit: ReturnType<typeof useKit>['kit'] }) {
-  if (kit.length === 0) return <div className="text-xs text-muted">Your kit is empty. Add lenses in My Kit.</div>;
-  const [lensId, setLensId] = useState(kit[0].id);
-  const lens = kit.find((l) => l.id === lensId)!;
-  const fmt = getFormat(lens.formatId ?? 'ff');
-  const [focal, setFocal] = useState(lens.focalMin);
-  const [aperture, setAperture] = useState(lens.apMax);
-  const [last, setLast] = useState(lens.id);
-  if (lens.id !== last) {
-    setLast(lens.id);
-    setFocal(lens.focalMin);
-    setAperture(lens.apMax);
+// A body+lens combo from the owned kit (the look depends on which body the lens
+// is mounted on, so we offer the real combinations).
+interface KitCombo {
+  id: string;
+  label: string;
+  formatId: string;
+  focalMin: number;
+  focalMax: number;
+  apMax: number;
+  apMin: number;
+  type: 'prime' | 'zoom';
+}
+
+function KitMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
+  const { cameras, lenses } = useKit();
+  const combos = useMemo<KitCombo[]>(() => {
+    const out: KitCombo[] = [];
+    for (const lens of lenses) {
+      const bodies = cameras.filter(
+        (c) => c.mount === lens.mount && lens.coversFormatIds.includes(c.formatId),
+      );
+      const targets = bodies.length ? bodies : [null];
+      for (const body of targets) {
+        const formatId = body?.formatId ?? lens.coversFormatIds[0] ?? 'ff';
+        out.push({
+          id: `${lens.id}|${body?.id ?? 'native'}`,
+          label: `${lens.name}${body ? ` · ${body.name}` : ''}`,
+          formatId,
+          focalMin: lens.focalMin,
+          focalMax: lens.focalMax,
+          apMax: lens.apMax,
+          apMin: lens.apMin,
+          type: lens.type,
+        });
+      }
+    }
+    return out;
+  }, [cameras, lenses]);
+
+  const [comboId, setComboId] = useState(combos[0]?.id ?? '');
+  const combo = combos.find((c) => c.id === comboId) ?? combos[0];
+  const [focal, setFocal] = useState(combo?.focalMin ?? 50);
+  const [aperture, setAperture] = useState(combo?.apMax ?? 1.8);
+  const [last, setLast] = useState(combo?.id);
+  if (combo && combo.id !== last) {
+    setLast(combo.id);
+    setFocal(combo.focalMin);
+    setAperture(combo.apMax);
   }
+
+  if (combos.length === 0)
+    return <div className="text-xs text-muted">Your kit is empty. Add a camera and lenses in My Kit.</div>;
+
+  const fmt = getFormat(combo.formatId);
   const submit = () =>
-    onAdd({
-      id: nextSystemId(),
-      context: `${shortFmt(fmt)} (kit)`,
-      format: fmt,
-      focal,
-      aperture,
-    });
+    onAdd({ id: nextSystemId(), context: combo.label, format: fmt, focal, aperture });
+
   return (
     <div className="space-y-3">
       <label className="flex flex-col gap-1">
-        <span className="label">Your lens · {shortFmt(fmt)}</span>
-        <select className={fieldCls} value={lensId} onChange={(e) => setLensId(e.target.value)}>
-          {kit.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
+        <span className="label">Body + lens from your kit</span>
+        <select className={fieldCls} value={comboId} onChange={(e) => setComboId(e.target.value)}>
+          {combos.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
             </option>
           ))}
         </select>
       </label>
-      <FocalAperture
-        lens={{ focalMin: lens.focalMin, focalMax: lens.focalMax, apMax: lens.apMax, apMin: lens.apMin, type: lens.type }}
-        focal={focal}
-        aperture={aperture}
-        setFocal={setFocal}
-        setAperture={setAperture}
-      />
+      <FocalAperture lens={combo} focal={focal} aperture={aperture} setFocal={setFocal} setAperture={setAperture} />
       <AddButton onClick={submit} />
     </div>
   );

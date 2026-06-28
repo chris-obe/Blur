@@ -3,16 +3,35 @@ import type { Format } from './engine';
 
 export type LensType = 'prime' | 'zoom';
 
-export interface Lens {
-  id: string;
+// ---- Owned kit (bodies + lenses), grouped by mount in the UI ----
+
+export interface OwnedCamera {
+  id: string; // instance id
+  catalogId: string; // source catalog camera id (for dedupe)
   name: string;
+  maker: string;
+  mount: string;
+  formatId: string;
+}
+
+export interface OwnedLens {
+  id: string; // instance id
+  catalogId?: string; // source catalog lens id (dedupe); undefined when manual
+  name: string;
+  maker?: string;
   type: LensType;
-  focalMin: number; // mm (== focalMax for primes)
-  focalMax: number;
-  apMax: number; // widest aperture, e.g. 1.8 (smaller number)
-  apMin: number; // narrowest aperture, e.g. 22
-  mount?: string;
-  formatId?: string; // native format the lens is designed for
+  focalMin: number;
+  focalMax: number; // == focalMin for primes
+  apMax: number; // widest aperture (smaller number)
+  apMin: number;
+  mount: string;
+  coversFormatIds: string[]; // sensor formats the image circle covers
+  af?: boolean;
+}
+
+export interface Kit {
+  cameras: OwnedCamera[];
+  lenses: OwnedLens[];
 }
 
 export interface GalleryItem {
@@ -57,6 +76,6 @@ export interface ViewEntry {
 }
 
 export type KitVerdict =
-  | { status: 'covered'; lens: Lens; note: string }
-  | { status: 'partial'; lens: Lens; note: string }
+  | { status: 'covered'; note: string }
+  | { status: 'partial'; note: string }
   | { status: 'missing'; note: string };

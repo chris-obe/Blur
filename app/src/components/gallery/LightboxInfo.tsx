@@ -64,7 +64,7 @@ function SensorCell({ fmt }: { fmt: Format }) {
 // The optical panel inside the lightbox. The format can be corrected (EXIF
 // guesses), and everything recomputes live; resets when the viewed entry changes.
 export function LightboxInfo({ entry }: { entry: ViewEntry }) {
-  const { kit } = useKit();
+  const { cameras, lenses } = useKit();
   const { add: addToCompare } = useCompare();
   const navigate = useNavigate();
   const [format, setFormat] = useState<Format>(entry.format);
@@ -84,7 +84,7 @@ export function LightboxInfo({ entry }: { entry: ViewEntry }) {
     return known ? FORMATS : [entry.format, ...FORMATS];
   }, [entry.format]);
 
-  const m = computeMatch(format, focal, aperture, kit);
+  const m = computeMatch(format, focal, aperture, { cameras, lenses });
   const verdict = m.kitEval.verdict;
   const vmap = {
     covered: { Icon: Check, label: 'In your kit' },

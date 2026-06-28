@@ -17,7 +17,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: Number(process.env.CONDUCTOR_PORT) || 5173,
+    port: Number(process.env.CONDUCTOR_PORT) || 5174,
     strictPort: true,
     host: true,
     fs: { allow: ['..'] }, // allow serving the sibling /engine dir
