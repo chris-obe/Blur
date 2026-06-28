@@ -101,23 +101,26 @@ export function LightboxInfo({ entry }: { entry: ViewEntry }) {
         <div className="label mt-1">{entry.metaLine}</div>
       </div>
 
-      {/* Source — correct the format if the guess is off; the rest is derived */}
+      {/* Source — the format dropdown only appears when the format is uncertain
+          (an upload the tool had to guess); otherwise it's known, so we hide it. */}
       <div>
         <div className="label mb-2">Source {entry.guessed && '· confirm format'}</div>
-        <select
-          value={format.id}
-          onChange={(e) => {
-            const next = options.find((f) => f.id === e.target.value);
-            if (next) setFormat(next);
-          }}
-          className="mb-2 w-full border border-line bg-transparent px-2 py-1.5 text-xs outline-none focus:border-line-strong"
-        >
-          {options.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
-        </select>
+        {entry.guessed && (
+          <select
+            value={format.id}
+            onChange={(e) => {
+              const next = options.find((f) => f.id === e.target.value);
+              if (next) setFormat(next);
+            }}
+            className="mb-2 w-full border border-line bg-transparent px-2 py-1.5 text-xs outline-none focus:border-line-strong"
+          >
+            {options.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+        )}
         <div className="grid grid-cols-3 gap-2">
           <Stat label="Focal length" value={`${Math.round(focal)} mm`} />
           <Stat label="Aperture" value={`ƒ/${aperture.toFixed(1)}`} />

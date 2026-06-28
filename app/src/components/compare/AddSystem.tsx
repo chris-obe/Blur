@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { FORMATS, getFormat, type Format } from '../../lib/engine';
 import { CAMERAS, LENSES } from '../../data/gear.seed';
-import { cameraFormat, defaultFocal, lensesForCamera, type Camera, type CatalogLens } from '../../lib/gear';
+import { cameraFormat, defaultFocal, lensesForCamera, type CatalogLens } from '../../lib/gear';
 import { useKit } from '../../store/KitProvider';
 import { useCompare, nextSystemId, type CompareSystem } from '../../store/CompareProvider';
 import { NumberField } from '../ui/NumberField';
@@ -10,6 +10,17 @@ import { NumberField } from '../ui/NumberField';
 type Mode = 'camera' | 'kit' | 'manual';
 
 const shortFmt = (f: Format) => f.name.replace(/\s*\(.*?\)\s*/g, '').trim();
+
+// Group catalog items by maker, preserving first-seen order, for <optgroup>s.
+function groupByMaker<T extends { maker: string }>(items: T[]): [string, T[]][] {
+  const m = new Map<string, T[]>();
+  for (const it of items) {
+    const arr = m.get(it.maker);
+    if (arr) arr.push(it);
+    else m.set(it.maker, [it]);
+  }
+  return [...m.entries()];
+}
 
 const fieldCls =
   'border border-line bg-transparent px-2 py-1.5 text-xs outline-none focus:border-line-strong';
@@ -70,15 +81,8 @@ function CameraMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
   const [camId, setCamId] = useState(CAMERAS[0].id);
   const camera = CAMERAS.find((c) => c.id === camId)!;
   const available = useMemo(() => lensesForCamera(camera, LENSES), [camera]);
-  const camGroups = useMemo(() => {
-    const m = new Map<string, Camera[]>();
-    for (const c of CAMERAS) {
-      const arr = m.get(c.maker);
-      if (arr) arr.push(c);
-      else m.set(c.maker, [c]);
-    }
-    return [...m.entries()];
-  }, []);
+  const camGroups = useMemo(() => groupByMaker(CAMERAS), []);
+  const lensGroups = useMemo(() => groupByMaker(available), [available]);
   const [lensId, setLensId] = useState(available[0]?.id ?? '');
   const lens = available.find((l) => l.id === lensId) ?? available[0];
 
@@ -130,12 +134,16 @@ function CameraMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
         <label className="flex flex-col gap-1">
           <span className="label">Lens ({available.length} available)</span>
           <select className={fieldCls} value={lensId} onChange={(e) => setLensId(e.target.value)}>
-            {available.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.maker} {l.name}
-                {l.thirdParty ? ' ·3rd' : ''}
-                {!l.af ? ' ·MF' : ''}
-              </option>
+            {lensGroups.map(([maker, lenses]) => (
+              <optgroup key={maker} label={maker}>
+                {lenses.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                    {l.thirdParty ? ' ·3rd' : ''}
+                    {!l.af ? ' ·MF' : ''}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </label>
