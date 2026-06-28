@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, AlertTriangle, Ban } from 'lucide-react';
+import { Check, AlertTriangle, Ban, MoveDiagonal } from 'lucide-react';
 import { FORMATS, cropFactor, diagonal, type Format } from '../../lib/engine';
 import { computeMatch } from '../../lib/match';
 import { useKit } from '../../store/KitProvider';
@@ -7,24 +7,54 @@ import type { ViewEntry } from '../../lib/types';
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
-// Optical "type" designation from the sensor diagonal (1" optical format ≈ 16mm
-// diagonal). Small sensors read as 1/x″ (phones, compacts); larger ones as x″.
+// "type" inch designation from the sensor diagonal (1" optical format ≈ 16mm).
 function sensorType(diagMm: number): string {
   const inches = diagMm / 16;
-  return inches >= 1 ? `${inches.toFixed(1)}″` : `1/${(1 / inches).toFixed(1)}″`;
+  // ≥ ~0.95 reads as a whole-inch type (e.g. the nominal 1″ sensor), else 1/x″.
+  return inches >= 0.95 ? `${inches.toFixed(1)}″` : `1/${(1 / inches).toFixed(1)}″`;
 }
 
-// e.g. "Type 1/3.6″ (12.0 mm²)"
-function sensorLabel(fmt: Format): string {
-  const area = fmt.w * fmt.h;
-  return `Type ${sensorType(diagonal(fmt))} (${area.toFixed(1)} mm²)`;
+// Sensors small enough that the "type" notation is the meaningful description
+// (phones and compacts, ~1" and below). Larger camera formats use name + diagonal.
+function isSmallSensor(fmt: Format): boolean {
+  return fmt.family === 'phone' || diagonal(fmt) < 18;
 }
 
-function Stat({ label, value, span }: { label: string; value: string; span?: boolean }) {
+// "Full frame (35mm)" -> "Full frame"; drops the trailing parenthetical.
+function shortName(name: string): string {
+  return name.replace(/\s*\(.*?\)\s*/g, '').trim() || name;
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className={['border border-line px-3 py-2', span ? 'col-span-3' : ''].join(' ')}>
+    <div className="border border-line px-3 py-2">
       <div className="label mb-1">{label}</div>
       <div className="text-sm font-bold tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+// Mobile/compact -> "Type 1/3.6″ (12.0 mm²)". Camera formats -> name + a
+// diagonal icon and the physical diagonal in mm (no "type", no "diagonal" word).
+function SensorCell({ fmt }: { fmt: Format }) {
+  const diag = diagonal(fmt);
+  return (
+    <div className="col-span-3 border border-line px-3 py-2">
+      <div className="label mb-1">Sensor size</div>
+      {isSmallSensor(fmt) ? (
+        <div className="text-sm font-bold tabular-nums">
+          Type {sensorType(diag)}{' '}
+          <span className="font-normal text-muted">({(fmt.w * fmt.h).toFixed(1)} mm²)</span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 text-sm font-bold">
+          <span>{shortName(fmt.name)}</span>
+          <span className="flex items-center gap-1 font-normal text-muted tabular-nums">
+            <MoveDiagonal size={13} strokeWidth={1.5} />
+            {diag.toFixed(1)} mm
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -88,7 +118,7 @@ export function LightboxInfo({ entry }: { entry: ViewEntry }) {
           <Stat label="Focal length" value={`${Math.round(focal)} mm`} />
           <Stat label="Aperture" value={`ƒ/${aperture.toFixed(1)}`} />
           <Stat label="Field of view" value={`${Math.round(m.fov.h)}°`} />
-          <Stat label="Sensor size" value={sensorLabel(format)} span />
+          <SensorCell fmt={format} />
         </div>
       </div>
 
