@@ -3,8 +3,6 @@ pages_build_output_dir = "app/dist"
 compatibility_date = "2026-06-27"
 
 [vars]
-AUTH0_DOMAIN = "your-tenant.auth0.com"
-AUTH0_AUDIENCE = "https://your-domain.example/api"
 ADMIN_API_TOKEN_SHA256 = "__REMOVED_ADMIN_API_TOKEN_SHA256__"
 
 [[d1_databases]]

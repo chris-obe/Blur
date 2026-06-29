@@ -305,10 +305,17 @@ export function GalleryAdmin({ accessToken, photos, loading, loaded, error, onRe
                 <Td>{photo.updatedAt ? new Date(photo.updatedAt).toLocaleString() : 'Unknown'}</Td>
                 <Td>
                   <div className="flex flex-wrap gap-2">
-                    <Button disabled={busyId === photo.id} onClick={() => updateStatus(photo, 'approved')}>
-                      <Check size={13} strokeWidth={1.5} />
-                      Approve
-                    </Button>
+                    {photo.status === 'approved' ? (
+                      <span className="inline-flex items-center gap-2 border border-line bg-faint px-3 py-1.5 text-xs uppercase tracking-wide">
+                        <Check size={13} strokeWidth={1.5} />
+                        Live
+                      </span>
+                    ) : (
+                      <Button disabled={busyId === photo.id} onClick={() => updateStatus(photo, 'approved')}>
+                        <Check size={13} strokeWidth={1.5} />
+                        Approve
+                      </Button>
+                    )}
                     <Button disabled={busyId === photo.id} onClick={() => updateStatus(photo, 'rejected')}>
                       <X size={13} strokeWidth={1.5} />
                       Reject
@@ -339,10 +346,11 @@ function AuthenticatedThumbnail({ photo, accessToken }: { photo: AdminGalleryPho
   useEffect(() => {
     let cancelled = false;
     let objectUrl: string | null = null;
+    const imageSrc = photo.status === 'approved' ? `/api/gallery/photos/${photo.id}/image` : photo.src;
     const headers = new Headers({ accept: photo.contentType ?? 'image/*' });
-    if (accessToken) headers.set('authorization', `Bearer ${accessToken}`);
+    if (photo.status !== 'approved' && accessToken) headers.set('authorization', `Bearer ${accessToken}`);
 
-    fetch(photo.src, { headers })
+    fetch(imageSrc, { headers })
       .then((res) => {
         if (!res.ok) throw new Error(`Thumbnail failed: ${res.status}`);
         return res.blob();
@@ -360,7 +368,7 @@ function AuthenticatedThumbnail({ photo, accessToken }: { photo: AdminGalleryPho
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [accessToken, photo.contentType, photo.src]);
+  }, [accessToken, photo.contentType, photo.id, photo.src, photo.status]);
 
   if (!src) return <div className="flex h-14 w-20 items-center justify-center border border-line bg-faint"><Upload size={14} strokeWidth={1.5} /></div>;
   return <img src={src} alt="" className="h-14 w-20 border border-line object-cover grayscale" />;
