@@ -8,6 +8,8 @@ import {
   type GalleryRow,
 } from '../../../_lib/gallery';
 import { adminAuthError, requireAdmin } from '../../../_lib/admin';
+import { galleryFormatIdOrDefault } from '../../../_lib/formats';
+import { findMissingGalleryTags } from '../../../_lib/galleryTags';
 
 type Env = GalleryEnv & {
   AUTH0_AUDIENCE?: string;
@@ -28,22 +30,31 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, params, request 
   if (!current) return json({ error: 'photo not found' }, { status: 404 });
 
   const body = (await request.json()) as Record<string, unknown>;
+  const formatId = formatIdValue(body.formatId, current.format_id);
+  if (!formatId) return json({ error: 'invalid formatId' }, { status: 400 });
+
+  const tags = body.tags == null
+    ? parseTags(current.tags_json)
+    : Array.isArray(body.tags)
+      ? normalizeTags(body.tags.map(String))
+      : normalizeTags(String(body.tags));
+  const missingTags = await findMissingGalleryTags(env, tags);
+  if (missingTags.length > 0) {
+    return json({ error: `Unknown gallery tag: ${missingTags.join(', ')}` }, { status: 400 });
+  }
+
   const next = {
     title: stringValue(body.title, current.title),
     author: stringValue(body.author, current.author),
     status: statusValue(body.status, current.status),
-    formatId: stringValue(body.formatId, current.format_id),
+    formatId,
     camera: stringValue(body.camera, current.camera),
     cameraCatalogId: nullableStringValue(body.cameraCatalogId, current.camera_catalog_id),
     lens: stringValue(body.lens, current.lens),
     lensCatalogId: nullableStringValue(body.lensCatalogId, current.lens_catalog_id),
     focal: numberValue(body.focal, current.focal),
     aperture: numberValue(body.aperture, current.aperture),
-    tags: body.tags == null
-      ? parseTags(current.tags_json)
-      : Array.isArray(body.tags)
-        ? body.tags.map(String)
-        : normalizeTags(String(body.tags)),
+    tags,
     metadataSource: body.metadataSource == null
       ? current.metadata_source_json
       : JSON.stringify(body.metadataSource),
@@ -119,4 +130,9 @@ function statusValue(value: unknown, fallback: string) {
   return typeof value === 'string' && ['draft', 'pending', 'approved', 'rejected'].includes(value)
     ? value
     : fallback;
+}
+
+function formatIdValue(value: unknown, fallback: string) {
+  if (typeof value === 'string') return galleryFormatIdOrDefault(value);
+  return galleryFormatIdOrDefault(fallback) ?? 'ff';
 }

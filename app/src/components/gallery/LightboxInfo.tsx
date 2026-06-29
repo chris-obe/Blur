@@ -5,9 +5,11 @@ import { FORMATS, cropFactor, diagonal, type Format } from '../../lib/engine';
 import { computeMatch } from '../../lib/match';
 import { useKit } from '../../store/KitProvider';
 import { useCompare, nextSystemId } from '../../store/CompareProvider';
+import { ReactionBar } from '../ui/ReactionBar';
 import type { ViewEntry } from '../../lib/types';
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
+const DEFAULT_TARGET_FORMAT_ID = 'ff';
 
 // "type" inch designation from the sensor diagonal (1" optical format ≈ 16mm).
 function sensorType(diagMm: number): string {
@@ -25,6 +27,12 @@ function isSmallSensor(fmt: Format): boolean {
 // "Full frame (35mm)" -> "Full frame"; drops the trailing parenthetical.
 function shortName(name: string): string {
   return name.replace(/\s*\(.*?\)\s*/g, '').trim() || name;
+}
+
+function equivalentLabel(fmt: Format): string {
+  const name = shortName(fmt.name);
+  if (fmt.id === 'ff') return 'Full-frame Equivalent';
+  return `${name} Equivalent`;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -68,14 +76,16 @@ export function LightboxInfo({ entry }: { entry: ViewEntry }) {
   const { add: addToCompare } = useCompare();
   const navigate = useNavigate();
   const [format, setFormat] = useState<Format>(entry.format);
+  const [targetFormatId, setTargetFormatId] = useState(DEFAULT_TARGET_FORMAT_ID);
   const [focal, setFocal] = useState(entry.focal);
   const [aperture, setAperture] = useState(entry.aperture);
 
   useEffect(() => {
     setFormat(entry.format);
+    setTargetFormatId(DEFAULT_TARGET_FORMAT_ID);
     setFocal(entry.focal);
     setAperture(entry.aperture);
-  }, [entry]);
+  }, [entry.id, entry.format, entry.focal, entry.aperture]);
 
   // Include the detected format in the dropdown when it's a synthesized one
   // (phones / focal-plane sensors aren't in the static list).
@@ -84,7 +94,8 @@ export function LightboxInfo({ entry }: { entry: ViewEntry }) {
     return known ? FORMATS : [entry.format, ...FORMATS];
   }, [entry.format]);
 
-  const m = computeMatch(format, focal, aperture, { cameras, lenses });
+  const targetFormat = FORMATS.find((f) => f.id === targetFormatId) ?? FORMATS.find((f) => f.id === DEFAULT_TARGET_FORMAT_ID) ?? FORMATS[0];
+  const m = computeMatch(format, focal, aperture, { cameras, lenses }, targetFormat);
   const verdict = m.kitEval.verdict;
   const vmap = {
     covered: { Icon: Check, label: 'In your kit' },
@@ -100,6 +111,13 @@ export function LightboxInfo({ entry }: { entry: ViewEntry }) {
         <div className="text-sm font-bold">{entry.title}</div>
         <div className="label mt-1">{entry.metaLine}</div>
       </div>
+
+      {entry.id !== 'upload' && (
+        <div>
+          <div className="label mb-2">What did you think?</div>
+          <ReactionBar photoId={entry.id} mode="expanded" />
+        </div>
+      )}
 
       {/* Source — the format dropdown only appears when the format is uncertain
           (an upload the tool had to guess); otherwise it's known, so we hide it. */}
@@ -123,16 +141,31 @@ export function LightboxInfo({ entry }: { entry: ViewEntry }) {
         )}
         <div className="grid grid-cols-3 gap-2">
           <Stat label="Focal length" value={`${Math.round(focal)} mm`} />
-          <Stat label="Aperture" value={`ƒ/${aperture.toFixed(1)}`} />
+          <Stat label="Shot aperture" value={`ƒ/${aperture.toFixed(1)}`} />
           <Stat label="Field of view" value={`${Math.round(m.fov.h)}°`} />
           <SensorCell fmt={format} />
         </div>
       </div>
 
+      <label className="block border border-line px-3 py-2">
+        <span className="label mb-2 block">Equivalent format</span>
+        <select
+          value={targetFormat.id}
+          onChange={(e) => setTargetFormatId(e.target.value)}
+          className="w-full bg-transparent text-sm font-bold outline-none"
+        >
+          {FORMATS.map((f) => (
+            <option key={f.id} value={f.id}>
+              {shortName(f.name)}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <div className="border border-line-strong p-4">
-        <div className="label mb-2">Full-frame equivalent</div>
+        <div className="label mb-2">{equivalentLabel(targetFormat)}</div>
         <div className="text-2xl font-bold tracking-tight tabular-nums">
-          {r1(m.ff.fullFrameEquivalent.focal)}mm · ƒ/{r1(m.ff.fullFrameEquivalent.aperture)}
+          {r1(m.equivalent.target.focal)}mm · ƒ/{r1(m.equivalent.target.aperture)}
         </div>
       </div>
 

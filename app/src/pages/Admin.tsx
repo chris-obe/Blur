@@ -5,29 +5,45 @@ import {
   Database,
   HardDrive,
   ImagePlus,
+  Plus,
   RefreshCw,
   Shield,
   SlidersHorizontal,
+  Tags,
+  ThumbsUp,
   UserCog,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
 import { isDevAdminBypass } from '../auth/adminAccess';
+import { useAdminAccess } from '../auth/AdminAccessProvider';
 import { adminAuthorizationParams, adminTokenParams } from '../auth/config';
 import {
   AdminApiError,
   getAdminIdentity,
+  getAdminUsers,
   getCatalogAdminStatus,
   triggerCatalogRefresh,
   updateCatalogAdminSettings,
   type AdminIdentity,
+  type AdminUsersResponse,
   type CatalogAdminStatus,
 } from '../lib/adminApi';
-import { listAdminGalleryPhotos, type AdminGalleryPhoto } from '../lib/galleryApi';
+import {
+  archiveAdminGalleryTag,
+  createAdminGalleryTag,
+  getAdminGalleryReactionStats,
+  listAdminGalleryPhotos,
+  listAdminGalleryTags,
+  updateAdminGalleryTag,
+  type AdminGalleryReactionStats,
+  type AdminGalleryPhoto,
+  type GalleryTag,
+} from '../lib/galleryApi';
 import { useCatalog } from '../store/CatalogProvider';
 import { GalleryAdmin } from '../components/admin/GalleryAdmin';
 
-type AdminSection = 'overview' | 'catalog' | 'gallery' | 'users' | 'storage';
+type AdminSection = 'overview' | 'catalog' | 'gallery' | 'reactions' | 'users' | 'storage' | 'settings';
 
 interface AdminGateProps {
   children: React.ReactNode;
@@ -37,8 +53,10 @@ const SECTIONS: Array<{ id: AdminSection; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'catalog', label: 'Catalog' },
   { id: 'gallery', label: 'Gallery' },
+  { id: 'reactions', label: 'Reactions' },
   { id: 'users', label: 'Users' },
   { id: 'storage', label: 'Storage' },
+  { id: 'settings', label: 'Settings' },
 ];
 
 function formatDate(value?: string | null): string {
@@ -66,42 +84,14 @@ function statusTone(status?: string | null): string {
 }
 
 function AdminGate({ children }: AdminGateProps) {
-  const { getAccessTokenSilently, isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
-  const [checking, setChecking] = useState(false);
-  const [denied, setDenied] = useState<string | null>(null);
-  const [verified, setVerified] = useState(false);
-  const devBypass = isDevAdminBypass();
+  const { loginWithRedirect } = useAuth0();
+  const { status, error } = useAdminAccess();
 
-  useEffect(() => {
-    if (devBypass || !isAuthenticated) return;
-
-    let cancelled = false;
-    setChecking(true);
-    setDenied(null);
-    setVerified(false);
-
-    getAccessTokenSilently({ authorizationParams: adminTokenParams })
-      .then((token) => getAdminIdentity(token))
-      .then(() => {
-        if (!cancelled) setVerified(true);
-      })
-      .catch((error) => {
-        if (!cancelled) setDenied(error instanceof Error ? error.message : 'Admin authorization failed');
-      })
-      .finally(() => {
-        if (!cancelled) setChecking(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [devBypass, getAccessTokenSilently, isAuthenticated]);
-
-  if (isLoading && !devBypass) {
-    return <AdminNotice title="Checking access" detail="Confirming your session before loading admin controls." />;
+  if (status === 'loading' || status === 'checking') {
+    return <AdminNotice title="Checking access" detail="Verifying your Auth0 admin permissions." />;
   }
 
-  if (!devBypass && !isAuthenticated) {
+  if (status === 'anonymous') {
     return (
       <AdminNotice
         title="Admin sign in required"
@@ -123,16 +113,8 @@ function AdminGate({ children }: AdminGateProps) {
     );
   }
 
-  if (checking) {
-    return <AdminNotice title="Checking access" detail="Verifying your Auth0 admin permissions." />;
-  }
-
-  if (denied) {
-    return <AdminNotice title="Not authorized" detail={denied} />;
-  }
-
-  if (!devBypass && !verified) {
-    return <AdminNotice title="Checking access" detail="Waiting for admin authorization." />;
+  if (status === 'denied') {
+    return <AdminNotice title="Not authorized" detail={error ?? 'Your account lacks the admin role.'} />;
   }
 
   return <>{children}</>;
@@ -172,7 +154,7 @@ export function Admin() {
 }
 
 function AdminConsole() {
-  const { getAccessTokenSilently, isAuthenticated } = useAuth0();
+  const { getAccessTokenSilently, isAuthenticated, user } = useAuth0();
   const catalog = useCatalog();
   const [section, setSection] = useState<AdminSection>('overview');
   const [adminIdentity, setAdminIdentity] = useState<AdminIdentity | null>(null);
@@ -182,14 +164,31 @@ function AdminConsole() {
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryLoaded, setGalleryLoaded] = useState(false);
   const [galleryError, setGalleryError] = useState<string | null>(null);
+  const [galleryTags, setGalleryTags] = useState<GalleryTag[]>([]);
+  const [galleryTagsLoading, setGalleryTagsLoading] = useState(false);
+  const [galleryTagsError, setGalleryTagsError] = useState<string | null>(null);
+  const [reactionStats, setReactionStats] = useState<AdminGalleryReactionStats | null>(null);
+  const [reactionStatsLoading, setReactionStatsLoading] = useState(false);
+  const [reactionStatsError, setReactionStatsError] = useState<string | null>(null);
+  const [usersResponse, setUsersResponse] = useState<AdminUsersResponse | null>(null);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersQuery, setUsersQuery] = useState('');
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const devBypass = isDevAdminBypass();
+  // Human-readable, low-maintenance: prefer a real name/email from the admin
+  // identity or the Auth0 ID-token claims; never surface the raw `auth0|…` sub.
   const accessLabel = devBypass
     ? 'Development bypass'
-    : adminIdentity?.email ?? adminIdentity?.name ?? adminIdentity?.sub ?? 'Authorized';
+    : adminIdentity?.name ??
+      adminIdentity?.email ??
+      user?.name ??
+      user?.email ??
+      user?.nickname ??
+      'Admin user';
 
   const getToken = async () => {
     if (!isAuthenticated) return undefined;
@@ -239,10 +238,83 @@ function AdminConsole() {
     }
   };
 
+  const loadGalleryTags = async () => {
+    setGalleryTagsLoading(true);
+    setGalleryTagsError(null);
+    try {
+      const token = await getToken();
+      setGalleryTags(await listAdminGalleryTags(token));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Gallery tags API failed';
+      setGalleryTagsError(message);
+      setError(message);
+    } finally {
+      setGalleryTagsLoading(false);
+    }
+  };
+
+  const createGalleryTag = async (label: string) => {
+    const token = await getToken();
+    const tag = await createAdminGalleryTag(label, token);
+    await loadGalleryTags();
+    return tag;
+  };
+
+  const updateGalleryTag = async (slug: string, updates: Partial<Pick<GalleryTag, 'label' | 'archived'>>) => {
+    const token = await getToken();
+    await updateAdminGalleryTag(slug, updates, token);
+    await loadGalleryTags();
+  };
+
+  const archiveGalleryTag = async (slug: string) => {
+    const token = await getToken();
+    await archiveAdminGalleryTag(slug, token);
+    await loadGalleryTags();
+  };
+
+  const loadReactionStats = async () => {
+    setReactionStatsLoading(true);
+    setReactionStatsError(null);
+    try {
+      const token = await getToken();
+      setReactionStats(await getAdminGalleryReactionStats(token));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Reaction analytics API failed';
+      setReactionStatsError(message);
+      setError(message);
+    } finally {
+      setReactionStatsLoading(false);
+    }
+  };
+
+  const loadUsers = async (query = usersQuery) => {
+    if (devBypass && !isAuthenticated) {
+      setUsersError('Sign in with Auth0 to inspect registered users.');
+      return;
+    }
+
+    setUsersLoading(true);
+    setUsersError(null);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Auth0 access token is unavailable.');
+      setUsersResponse(await getAdminUsers(token, { q: query, perPage: 50 }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Users API failed';
+      setUsersError(message);
+      setError(message);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
   useEffect(() => {
     void loadIdentity();
     void loadStatus();
     void loadGallery();
+    void loadGalleryTags();
+    void loadReactionStats();
+    if (isAuthenticated) void loadUsers('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
@@ -255,8 +327,8 @@ function AdminConsole() {
       },
       {
         label: 'Users',
-        value: 'Not connected',
-        detail: 'Waiting for user/profile API',
+        value: usersResponse ? `${usersResponse.total} registered` : usersLoading ? 'Loading' : 'Unavailable',
+        detail: usersError ?? `${usersResponse?.stats.activeLast30Days ?? 0} active in 30 days`,
       },
       {
         label: 'Gallery',
@@ -264,13 +336,30 @@ function AdminConsole() {
         detail: galleryError ?? `${galleryPhotos.filter((photo) => photo.status === 'pending').length} pending approval`,
       },
       {
+        label: 'Reactions',
+        value: reactionStats ? `${reactionStats.totals.total} total` : reactionStatsLoading ? 'Loading' : 'Unavailable',
+        detail: reactionStatsError ?? `${reactionStats?.totals.reactingUsers ?? 0} reacting users`,
+      },
+      {
         label: 'Storage',
         value: status?.export?.size ? formatBytes(status.export.size) : 'Unavailable',
         detail: status?.export?.key ?? 'R2 media and catalog objects',
       },
     ],
-    [catalog.source, catalog.status, galleryError, galleryLoaded, galleryPhotos, status],
+    [catalog.source, catalog.status, galleryError, galleryLoaded, galleryPhotos, reactionStats, reactionStatsError, reactionStatsLoading, status, usersError, usersLoading, usersResponse],
   );
+
+  // Master refresh: reload every section's data at once.
+  const refreshAll = async () => {
+    await Promise.allSettled([
+      loadIdentity(),
+      loadStatus(),
+      loadGallery(),
+      loadGalleryTags(),
+      loadReactionStats(),
+      isAuthenticated ? loadUsers(usersQuery) : Promise.resolve(),
+    ]);
+  };
 
   const refreshNow = async () => {
     setSaving(true);
@@ -334,9 +423,13 @@ function AdminConsole() {
               {accessLabel}
             </span>
             {devBypass && <Chip active>Dev open</Chip>}
-            <Button onClick={loadStatus} disabled={loading || saving}>
+            <Button
+              onClick={refreshAll}
+              disabled={loading || saving || galleryLoading || usersLoading}
+              title="Reload catalog status, gallery and users"
+            >
               <RefreshCw size={14} strokeWidth={1.5} />
-              Reload
+              Refresh all
             </Button>
           </div>
         </div>
@@ -391,15 +484,45 @@ function AdminConsole() {
             <GalleryModerationSection
               accessToken={adminToken}
               photos={galleryPhotos}
+              tags={galleryTags}
               loading={galleryLoading}
               loaded={galleryLoaded}
               error={galleryError}
               onReload={loadGallery}
+              onCreateTag={createGalleryTag}
               onError={setError}
             />
           )}
-          {section === 'users' && <UsersSection />}
+          {section === 'reactions' && (
+            <ReactionsSection
+              stats={reactionStats}
+              loading={reactionStatsLoading}
+              error={reactionStatsError}
+              onReload={loadReactionStats}
+            />
+          )}
+          {section === 'users' && (
+            <UsersSection
+              response={usersResponse}
+              query={usersQuery}
+              loading={usersLoading}
+              error={usersError}
+              onQueryChange={setUsersQuery}
+              onReload={() => loadUsers(usersQuery)}
+            />
+          )}
           {section === 'storage' && <StorageSection exportStatus={status?.export ?? null} />}
+          {section === 'settings' && (
+            <SettingsSection
+              tags={galleryTags}
+              loading={galleryTagsLoading}
+              error={galleryTagsError}
+              onReload={loadGalleryTags}
+              onCreate={createGalleryTag}
+              onUpdate={updateGalleryTag}
+              onArchive={archiveGalleryTag}
+            />
+          )}
         </section>
       </div>
     </div>
@@ -428,7 +551,8 @@ function OverviewSection({
                 ['Catalog status', 'Live'],
                 ['Catalog refresh', 'Live'],
                 ['Gallery approvals', galleryLoaded ? 'Live' : 'Checking'],
-                ['User role assignment', 'API needed'],
+                ['Auth0 user lookup', 'Live'],
+                ['User role assignment', 'Read-only'],
                 ['R2 media browser', galleryLoaded ? 'Live' : 'Checking'],
                 ['Audit history', 'API needed'],
               ].map(([item, state]) => (
@@ -490,20 +614,26 @@ function CatalogSection({
         <div className="space-y-4">
           <div className="border border-line p-3">
             <div className="label mb-2">Auto refresh</div>
-            <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!!status?.settings.autoRefreshEnabled}
+              onClick={onToggleAutoRefresh}
+              disabled={!status || loading || saving}
+              className="flex w-full items-center justify-between gap-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+            >
               <span>{status?.settings.autoRefreshEnabled ? 'Enabled' : 'Disabled'}</span>
               <span
                 className={[
                   'inline-flex h-6 w-10 items-center border transition-colors',
-                  status?.settings.autoRefreshEnabled ? 'justify-end bg-fg' : 'justify-start bg-transparent',
+                  status?.settings.autoRefreshEnabled
+                    ? 'justify-end border-fg bg-fg'
+                    : 'justify-start border-line bg-transparent',
                 ].join(' ')}
               >
-                <span className="m-1 h-3.5 w-3.5 bg-bg" />
+                <span className={['m-1 h-3.5 w-3.5', status?.settings.autoRefreshEnabled ? 'bg-bg' : 'bg-fg'].join(' ')} />
               </span>
-            </div>
-            <Button onClick={onToggleAutoRefresh} disabled={!status || loading || saving}>
-              Toggle
-            </Button>
+            </button>
           </div>
 
           <label className="block border border-line p-3">
@@ -514,7 +644,7 @@ function CatalogSection({
               max={365}
               value={draftDays}
               onChange={(event) => setDraftDays(Number(event.target.value))}
-              className="mb-3 w-full border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-line-strong"
+              className="mb-3 h-9 w-full border border-line bg-transparent px-3 text-sm outline-none focus:border-line-strong"
             />
             <Button
               onClick={() => onUpdateInterval(draftDays)}
@@ -537,18 +667,22 @@ function CatalogSection({
 function GalleryModerationSection({
   accessToken,
   photos,
+  tags,
   loading,
   loaded,
   error,
   onReload,
+  onCreateTag,
   onError,
 }: {
   accessToken?: string;
   photos: AdminGalleryPhoto[];
+  tags: GalleryTag[];
   loading: boolean;
   loaded: boolean;
   error?: string | null;
   onReload: () => Promise<void>;
+  onCreateTag: (label: string) => Promise<GalleryTag>;
   onError: (message: string) => void;
 }) {
   return (
@@ -556,27 +690,432 @@ function GalleryModerationSection({
       <GalleryAdmin
         accessToken={accessToken}
         photos={photos}
+        tags={tags}
         loading={loading}
         loaded={loaded}
         error={error}
         onReload={onReload}
+        onCreateTag={onCreateTag}
         onError={onError}
       />
     </Panel>
   );
 }
 
-function UsersSection() {
+function ReactionsSection({
+  stats,
+  loading,
+  error,
+  onReload,
+}: {
+  stats: AdminGalleryReactionStats | null;
+  loading: boolean;
+  error?: string | null;
+  onReload: () => Promise<void>;
+}) {
   return (
-    <Panel title="Users and roles" icon={UserCog}>
-      <div className="border border-line p-4 text-xs">
-        <div className="mb-2 font-bold">No app-local users endpoint is present in this workspace yet.</div>
-        <div className="text-muted">
-          This should not call the Auth0 Management API from the browser. Add a server-side admin endpoint for app-local
-          profiles, saved kits, uploads, and role changes.
+    <div className="space-y-5">
+      <Panel title="Gallery reactions" icon={ThumbsUp}>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <div className="label mb-1">Taste signals</div>
+            <div className="text-sm text-muted">Signed-in user reactions are scoped by Auth0 user ID and aggregated per photo.</div>
+          </div>
+          <Button onClick={onReload} disabled={loading}>
+            <RefreshCw size={14} strokeWidth={1.5} />
+            {loading ? 'Loading' : 'Reload'}
+          </Button>
+        </div>
+
+        {error && (
+          <div className="mb-4 border border-line bg-faint p-3 text-xs">
+            <span className="inline-flex items-center gap-2">
+              <AlertTriangle size={14} strokeWidth={1.5} />
+              {error}
+            </span>
+          </div>
+        )}
+
+        <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <SmallStat label="Total" value={String(stats?.totals.total ?? 0)} detail="All stored reactions" />
+          <SmallStat label="Users" value={String(stats?.totals.reactingUsers ?? 0)} detail="Distinct Auth0 users" />
+          <SmallStat label="Not for me" value={String(stats?.totals.dislike ?? 0)} detail="Dislikes" />
+          <SmallStat label="Likes" value={String(stats?.totals.like ?? 0)} detail="Liked photos" />
+          <SmallStat label="Loves" value={String(stats?.totals.love ?? 0)} detail="Strongest taste signal" />
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+          <div className="overflow-x-auto border border-line">
+            <table className="w-full min-w-[46rem] text-left text-xs">
+              <thead className="border-b border-line bg-faint text-muted">
+                <tr>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">Photo</th>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">State</th>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">Users</th>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">Not for me</th>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">Like</th>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">Love</th>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {(stats?.byPhoto ?? []).map((row) => (
+                  <tr key={row.photoId}>
+                    <td className="px-3 py-2">
+                      <div className="font-bold">{row.title}</div>
+                      <div className="text-muted">{row.photoId}</div>
+                    </td>
+                    <td className="px-3 py-2">{row.status}</td>
+                    <td className="px-3 py-2">{row.reactingUsers}</td>
+                    <td className="px-3 py-2">{row.dislike}</td>
+                    <td className="px-3 py-2">{row.like}</td>
+                    <td className="px-3 py-2">{row.love}</td>
+                    <td className="px-3 py-2 font-bold">{row.total}</td>
+                  </tr>
+                ))}
+                {!stats && !loading && (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-6 text-center text-muted">
+                      No reaction data loaded yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="border border-line">
+            <div className="border-b border-line bg-faint px-3 py-2 text-xs uppercase tracking-wide text-muted">
+              Recent user reactions
+            </div>
+            <div className="max-h-[32rem] divide-y divide-line overflow-auto">
+              {(stats?.recent ?? []).map((row) => (
+                <div key={`${row.photoId}-${row.userSub}-${row.updatedAt}`} className="p-3 text-xs">
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <span className="font-bold">{row.reaction}</span>
+                    <span className="text-muted">{formatDate(row.updatedAt)}</span>
+                  </div>
+                  <div className="truncate">{row.title}</div>
+                  <div className="truncate text-muted">{row.userName ?? row.userEmail ?? row.userSub}</div>
+                </div>
+              ))}
+              {stats && stats.recent.length === 0 && (
+                <div className="p-3 text-xs text-muted">No reactions stored yet.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function SettingsSection({
+  tags,
+  loading,
+  error,
+  onReload,
+  onCreate,
+  onUpdate,
+  onArchive,
+}: {
+  tags: GalleryTag[];
+  loading: boolean;
+  error?: string | null;
+  onReload: () => Promise<void>;
+  onCreate: (label: string) => Promise<GalleryTag>;
+  onUpdate: (slug: string, updates: Partial<Pick<GalleryTag, 'label' | 'archived'>>) => Promise<void>;
+  onArchive: (slug: string) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState('');
+  const [query, setQuery] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const filtered = tags.filter((tag) => {
+    const needle = query.trim().toLowerCase();
+    return !needle || tag.label.includes(needle) || tag.slug.includes(needle);
+  });
+
+  const create = async () => {
+    if (!draft.trim()) return;
+    setBusy('new');
+    try {
+      await onCreate(draft);
+      setDraft('');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const save = async (tag: GalleryTag) => {
+    const next = edits[tag.slug] ?? tag.label;
+    setBusy(tag.slug);
+    try {
+      await onUpdate(tag.slug, { label: next });
+      setEdits((current) => {
+        const copy = { ...current };
+        delete copy[tag.slug];
+        return copy;
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Panel title="Gallery tags" icon={Tags}>
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end">
+          <label className="min-w-0 flex-1">
+            <span className="label mb-2 block">Search tags</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="portrait, film, large format"
+              className="h-9 w-full border border-line bg-transparent px-3 text-sm outline-none focus:border-line-strong"
+            />
+          </label>
+          <label className="min-w-0 flex-1">
+            <span className="label mb-2 block">Add tag</span>
+            <input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') void create();
+              }}
+              placeholder="new tag"
+              className="h-9 w-full border border-line bg-transparent px-3 text-sm outline-none focus:border-line-strong"
+            />
+          </label>
+          <Button onClick={create} disabled={!draft.trim() || busy === 'new'} className="h-9 shrink-0">
+            <Plus size={14} strokeWidth={1.5} />
+            Add tag
+          </Button>
+          <Button onClick={onReload} disabled={loading} className="h-9 shrink-0">
+            <RefreshCw size={14} strokeWidth={1.5} />
+            Reload
+          </Button>
+        </div>
+
+        {error && (
+          <div className="border border-line bg-faint p-3 text-xs">
+            <span className="inline-flex items-center gap-2">
+              <AlertTriangle size={14} strokeWidth={1.5} />
+              {error}
+            </span>
+          </div>
+        )}
+
+        <div className="overflow-x-auto border border-line">
+          <table className="w-full min-w-[42rem] text-left text-xs">
+            <thead className="border-b border-line bg-faint text-muted">
+              <tr>
+                <th className="px-3 py-2 font-normal uppercase tracking-wide">Label</th>
+                <th className="px-3 py-2 font-normal uppercase tracking-wide">Slug</th>
+                <th className="px-3 py-2 font-normal uppercase tracking-wide">State</th>
+                <th className="px-3 py-2 font-normal uppercase tracking-wide">Updated</th>
+                <th className="px-3 py-2 font-normal uppercase tracking-wide">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {filtered.map((tag) => {
+                const edit = edits[tag.slug] ?? tag.label;
+                return (
+                  <tr key={tag.slug}>
+                    <td className="px-3 py-2">
+                      <input
+                        value={edit}
+                        onChange={(event) => setEdits((current) => ({ ...current, [tag.slug]: event.target.value }))}
+                        className="w-full border border-line bg-transparent px-2 py-1.5 outline-none focus:border-line-strong"
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-muted">{tag.slug}</td>
+                    <td className="px-3 py-2">{tag.archived ? 'Archived' : 'Active'}</td>
+                    <td className="px-3 py-2">{formatDate(tag.updatedAt)}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-2">
+                        <Button onClick={() => save(tag)} disabled={busy === tag.slug || !edit.trim() || edit === tag.label}>
+                          Save
+                        </Button>
+                        {tag.archived ? (
+                          <Button onClick={() => onUpdate(tag.slug, { archived: false })} disabled={busy === tag.slug}>
+                            Restore
+                          </Button>
+                        ) : (
+                          <Button onClick={() => onArchive(tag.slug)} disabled={busy === tag.slug}>
+                            Archive
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-3 py-6 text-center text-muted">
+                    {loading ? 'Loading tags…' : 'No tags match this search.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </Panel>
+  );
+}
+
+function UsersSection({
+  response,
+  query,
+  loading,
+  error,
+  onQueryChange,
+  onReload,
+}: {
+  response: AdminUsersResponse | null;
+  query: string;
+  loading: boolean;
+  error?: string | null;
+  onQueryChange: (query: string) => void;
+  onReload: () => void;
+}) {
+  const stats = response?.stats;
+  const providerRows = stats ? Object.entries(stats.providerCounts).sort((a, b) => b[1] - a[1]) : [];
+
+  return (
+    <div className="space-y-5">
+      <Panel title="Users and sign-ins" icon={UserCog}>
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <label className="block min-w-0 flex-1">
+            <span className="label mb-2 block">Search Auth0 users</span>
+            <input
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') onReload();
+              }}
+              placeholder="email, name, provider, or Auth0 query"
+              className="h-9 w-full border border-line bg-transparent px-3 text-sm outline-none focus:border-line-strong"
+            />
+          </label>
+          <Button onClick={onReload} disabled={loading} className="h-9 shrink-0">
+            <RefreshCw size={14} strokeWidth={1.5} />
+            {loading ? 'Loading' : 'Reload users'}
+          </Button>
+        </div>
+
+        {error && (
+          <div className="mb-4 border border-line bg-faint p-3 text-xs">
+            <span className="inline-flex items-center gap-2">
+              <AlertTriangle size={14} strokeWidth={1.5} />
+              {error}
+            </span>
+          </div>
+        )}
+
+        <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <SmallStat label="Registered" value={String(response?.total ?? 'Unknown')} detail={`${response?.returned ?? 0} visible`} />
+          <SmallStat label="Active" value={String(stats?.activeLast30Days ?? 0)} detail="Last 30 days" />
+          <SmallStat label="New" value={String(stats?.createdLast7Days ?? 0)} detail="Last 7 days" />
+          <SmallStat label="Verified" value={String(stats?.verifiedEmail ?? 0)} detail={`${stats?.unverifiedEmail ?? 0} unverified`} />
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="overflow-x-auto border border-line">
+            <table className="w-full min-w-[48rem] text-left text-xs">
+              <thead className="border-b border-line bg-faint text-muted">
+                <tr>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">User</th>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">Provider</th>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">Logins</th>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">Last login</th>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">Created</th>
+                  <th className="px-3 py-2 font-normal uppercase tracking-wide">State</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {(response?.users ?? []).map((user) => (
+                  <tr key={user.id}>
+                    <td className="px-3 py-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        {user.picture ? (
+                          <img src={user.picture} alt="" className="h-8 w-8 border border-line object-cover" />
+                        ) : (
+                          <div className="h-8 w-8 border border-line bg-faint" />
+                        )}
+                        <div className="min-w-0">
+                          <div className="truncate font-bold">{user.name ?? user.email ?? user.id}</div>
+                          <div className="truncate text-muted">{user.email ?? user.id}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {(user.providers.length ? user.providers : ['unknown']).map((provider) => (
+                          <span key={provider} className="border border-line px-1.5 py-0.5 uppercase tracking-wide">
+                            {provider}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">{user.loginsCount}</td>
+                    <td className="px-3 py-3">{formatDate(user.lastLogin)}</td>
+                    <td className="px-3 py-3">{formatDate(user.createdAt)}</td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        <span className={user.emailVerified ? 'border border-fg px-1.5 py-0.5' : 'border border-line px-1.5 py-0.5 text-muted'}>
+                          {user.emailVerified ? 'Verified' : 'Unverified'}
+                        </span>
+                        {user.blocked && <span className="border border-line-strong px-1.5 py-0.5">Blocked</span>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {response && response.users.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-muted">
+                      No users match this search.
+                    </td>
+                  </tr>
+                )}
+                {!response && !loading && !error && (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-muted">
+                      No user data loaded yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="space-y-4">
+            <div className="border border-line p-3">
+              <div className="label mb-3">Providers</div>
+              <div className="divide-y divide-line border border-line">
+                {providerRows.map(([provider, count]) => (
+                  <div key={provider} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
+                    <span>{provider}</span>
+                    <span className="font-bold">{count}</span>
+                  </div>
+                ))}
+                {providerRows.length === 0 && <div className="px-3 py-2 text-xs text-muted">No provider data</div>}
+              </div>
+            </div>
+
+            <div className="border border-line p-3">
+              <div className="label mb-3">Access model</div>
+              <div className="space-y-2 text-xs text-muted">
+                <p>Auth0 is the identity source for this portfolio.</p>
+                <p>App-local profiles and entitlements should still be created lazily when a product needs them.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Panel>
+    </div>
   );
 }
 

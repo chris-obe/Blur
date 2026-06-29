@@ -7,6 +7,8 @@ import {
   type GalleryRow,
 } from '../../../_lib/gallery';
 import { adminAuthError, requireAdmin } from '../../../_lib/admin';
+import { galleryFormatIdOrDefault } from '../../../_lib/formats';
+import { findMissingGalleryTags } from '../../../_lib/galleryTags';
 
 type Env = GalleryEnv & {
   AUTH0_AUDIENCE?: string;
@@ -14,6 +16,8 @@ type Env = GalleryEnv & {
   ADMIN_API_OPEN?: string;
   ADMIN_API_TOKEN?: string;
 };
+
+const MAX_GALLERY_UPLOAD_BYTES = 1024 * 1024;
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
@@ -44,16 +48,27 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   const form = await request.formData();
   const file = form.get('file');
   if (!(file instanceof File)) return json({ error: 'file is required' }, { status: 400 });
+  if (file.size > MAX_GALLERY_UPLOAD_BYTES) {
+    return json({ error: 'gallery image must be 1 MB or smaller after processing' }, { status: 413 });
+  }
 
   const title = String(form.get('title') ?? file.name).trim();
   const now = new Date().toISOString();
   const id = cleanId(String(form.get('id') ?? title)) || crypto.randomUUID();
-  const ext = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+  const ext = extensionForFile(file);
   const objectKey = `photos/${id}/original.${ext}`;
   const status = String(form.get('status') ?? 'pending');
 
   if (!['draft', 'pending', 'approved', 'rejected'].includes(status)) {
     return json({ error: 'invalid status' }, { status: 400 });
+  }
+
+  const formatId = galleryFormatIdOrDefault(form.get('formatId'));
+  if (!formatId) return json({ error: 'invalid formatId' }, { status: 400 });
+  const tags = normalizeTags(form.get('tags'));
+  const missingTags = await findMissingGalleryTags(env, tags);
+  if (missingTags.length > 0) {
+    return json({ error: `Unknown gallery tag: ${missingTags.join(', ')}` }, { status: 400 });
   }
 
   await env.GALLERY_BUCKET.put(objectKey, file.stream(), {
@@ -79,14 +94,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       file.type || 'application/octet-stream',
       numberOrNull(form.get('width')),
       numberOrNull(form.get('height')),
-      String(form.get('formatId') ?? 'ff'),
+      formatId,
       String(form.get('camera') ?? 'Unknown camera'),
       stringOrNull(form.get('cameraCatalogId')),
       String(form.get('lens') ?? 'Unknown lens'),
       stringOrNull(form.get('lensCatalogId')),
       numberOrDefault(form.get('focal'), 50),
       numberOrDefault(form.get('aperture'), 1.8),
-      JSON.stringify(normalizeTags(form.get('tags'))),
+      JSON.stringify(tags),
       stringOrNull(form.get('metadataSource')),
       String(form.get('submittedBy') ?? ''),
       String(form.get('notes') ?? ''),
@@ -115,4 +130,11 @@ function stringOrNull(value: FormDataEntryValue | null) {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function extensionForFile(file: File) {
+  if (file.type === 'image/webp') return 'webp';
+  if (file.type === 'image/jpeg') return 'jpg';
+  if (file.type === 'image/png') return 'png';
+  return file.name.includes('.') ? file.name.split('.').pop() || 'jpg' : 'jpg';
 }
