@@ -31,3 +31,6 @@ yarn-error.log*
 # Conductor workspace (local collaboration scratch)
 .context/
 .conductor/
+.agents/
+.wrangler/
+skills-lock.json
