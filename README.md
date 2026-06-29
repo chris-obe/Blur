@@ -1,4 +1,4 @@
-# compareblur
+# CompareBlur
 
 A ground-up revamp of the classic [howmuchblur](https://github.com/maakbaas/how-much-blur)
 background-blur calculator — rebuilt around a portable optics **engine** and a modern,
@@ -12,11 +12,14 @@ Instead of only "viewing a graph", the goal is to answer real photographer quest
 
 | Path        | What it is |
 |-------------|------------|
-| `engine/`   | Framework-agnostic optics engine (pure ES modules, zero deps). The equivalence math: field of view, background blur, cross-format matching, panoramic crops. Shared by the app and demos. |
-| `app/`      | The new frontend — Vite + React + TypeScript + Tailwind. Gallery, EXIF upload + matching, kit awareness. |
-| `demo/`     | Minimal reference pages that wire the engine directly (incl. a live "render the blur" concept). Serve over HTTP. |
-| `docs/`     | Design system + design-direction prompts. |
-| `legacy/`   | The original jQuery `howmuchblur` site, preserved as-is. |
+| `app/`      | Vite + React + TypeScript frontend. Compare, Gallery, My Kit, Suggestions, and Admin surfaces. |
+| `engine/`   | Framework-agnostic optics engine. Handles field of view, blur matching, crops, formats, and equivalent-system math. |
+| `catalog/`  | Source adapters and deterministic transforms for the generated camera/lens catalog. |
+| `workers/`  | Cloudflare Worker for scheduled catalog refresh and R2 export publishing. |
+| `functions/` | Cloudflare Pages Functions for admin, gallery, image, and catalog proxy APIs. |
+| `migrations/` | D1 migrations for app-owned data such as gallery metadata. |
+| `scripts/`  | Operational scripts, including gallery seed migration into Cloudflare. |
+| `docs/`     | Design and catalog orchestration notes. |
 
 ## The engine
 
@@ -51,11 +54,32 @@ bun run build    # type-check + production bundle
 The app imports the engine from the sibling `engine/` directory via a Vite alias
 (`@engine`), so the engine stays shared rather than copied.
 
+## Catalog data
+
+The app uses one generated catalog surface rather than parallel hand-maintained
+camera/lens datasets. The catalog pipeline fetches LensDB and CameraDatabase,
+layers curated overrides, validates the result, and writes:
+
+- `app/public/catalog.fallback.json` for static fallback builds.
+- `exports/catalog.latest.json` in R2 via the `compareblur-catalog-sync` Worker.
+
+Useful commands:
+
+```bash
+bun run catalog:build
+bun run catalog:check
+bun run catalog:worker:deploy
+```
+
+The generated catalog currently includes camera bodies, fixed-lens compact
+cameras, interchangeable lenses, curated GF/legacy lenses, aperture points, and
+fixed compact camera/lens bindings.
+
 ## Cloudflare Pages
 
-This project deploys as a static Cloudflare Pages site; no Workers or Pages
-Functions are required for blur graph generation. The graph/math path is handled
-by the framework-agnostic engine in `engine/` and bundled into the Vite client.
+This project deploys the React/Vite app as a static Cloudflare Pages site. The
+blur graph/math path is still fully client-side through `engine/`; mutable data
+uses Cloudflare serverless services.
 
 Use these Pages build settings from the connected GitHub repository:
 
@@ -69,6 +93,14 @@ The root `wrangler.toml` records `app/dist` as the Pages output directory, and
 `app/public/_redirects` preserves client-side routing on Cloudflare Pages.
 The root `package.json` also supports Pages projects currently configured with
 `bun run build`; that command delegates to the same app build above.
+
+Cloudflare-backed data paths:
+
+- Catalog refresh/export: Worker + D1 + R2.
+- Gallery metadata/moderation: Pages Functions + D1.
+- Gallery image objects: R2.
+- Admin operations: same-origin Pages Functions that inject server-side secrets
+  and/or verify Auth0/Cloudflare Access identity.
 
 ## Credits
 
