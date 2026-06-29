@@ -98,6 +98,26 @@ body {
   color: var(--bg);
 }
 
+/* Brand wordmark: a quick optical "rack focus" — defocus and resolve — on hover. */
+.brand-rack {
+  display: inline-block;
+  will-change: filter;
+}
+.brand-rack:hover {
+  animation: brand-rack-focus 0.7s ease;
+}
+@keyframes brand-rack-focus {
+  0% {
+    filter: blur(0);
+  }
+  45% {
+    filter: blur(5px);
+  }
+  100% {
+    filter: blur(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;

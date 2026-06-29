@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react';
+import { BrandMark } from './BrandMark';
 import { ThemeToggle } from './ThemeToggle';
 import { UserMenu } from './UserMenu';
 
@@ -7,7 +8,7 @@ export function TopBar({ title }: { title: string }) {
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-line px-5">
       <div className="flex min-w-0 items-baseline gap-3">
         {/* brand lives in the sidebar on desktop; surface it here on mobile */}
-        <span className="text-lg font-bold tracking-tight lg:hidden">blur</span>
+        <BrandMark className="lg:hidden" />
         <h1 className="truncate text-sm font-bold tracking-tight">{title}</h1>
       </div>
       <div className="flex items-center gap-3">

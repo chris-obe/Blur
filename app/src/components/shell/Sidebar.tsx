@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAdminAccess } from '../../auth/AdminAccessProvider';
+import { BrandMark } from './BrandMark';
 import { PRIMARY_NAV, FOOTER_NAV, type NavItemData } from './navItems';
 
 function NavItem({ to, label, icon: Icon, end }: NavItemData) {
@@ -28,7 +29,7 @@ export function Sidebar() {
   return (
     <aside className="hidden h-full w-52 shrink-0 flex-col border-r border-line lg:flex">
       <div className="flex h-14 items-center border-b border-line px-4">
-        <span className="text-lg font-bold tracking-tight">blur</span>
+        <BrandMark />
       </div>
 
       <nav className="flex flex-col py-2">
