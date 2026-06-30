@@ -13,6 +13,7 @@ interface Props {
   value: string;
   onChange: (id: string) => void;
   placeholder?: string;
+  showMakerInTrigger?: boolean;
 }
 
 function searchableText(value: string) {
@@ -24,7 +25,7 @@ function searchableText(value: string) {
 
 // Single-select searchable dropdown with brand (maker) group headers — the
 // single-select sibling of LensMultiSelect, used for camera pickers.
-export function SearchSelect({ options, value, onChange, placeholder }: Props) {
+export function SearchSelect({ options, value, onChange, placeholder, showMakerInTrigger = true }: Props) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const ref = useRef<HTMLDivElement>(null);
@@ -52,7 +53,9 @@ export function SearchSelect({ options, value, onChange, placeholder }: Props) {
   }, [options, q]);
 
   const selected = options.find((o) => o.id === value);
-  const triggerText = selected ? `${selected.maker} ${selected.label}` : (placeholder ?? 'Select…');
+  const triggerText = selected
+    ? (showMakerInTrigger ? `${selected.maker} ${selected.label}` : selected.label)
+    : (placeholder ?? 'Select…');
 
   const choose = (id: string) => {
     onChange(id);
