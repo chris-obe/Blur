@@ -12,13 +12,17 @@ export const EMBED_FIELD_OPTIONS: Array<{ id: EmbedFieldId; label: string }> = [
   { id: 'subject', label: 'Framing' },
 ];
 
+export const EMBED_METADATA_LIMIT = 6;
+
 export const DEFAULT_EMBED_TEMPLATE: EmbedTemplate = {
   theme: 'light',
   density: 'comfortable',
-  frameStyle: 'technical',
-  imageFit: 'cover',
+  frameStyle: 'minimal',
+  imageFit: 'contain',
+  metadataPlacement: 'bottom',
+  showMetadata: true,
   defaultTargetFormatId: 'ff',
-  visibleFields: EMBED_FIELD_OPTIONS.map((field) => field.id),
+  visibleFields: ['camera', 'lens', 'focal', 'aperture', 'format', 'capturedAt'],
   ctaLabel: 'Open in blur',
-  showEquivalent: true,
+  showEquivalent: false,
 };

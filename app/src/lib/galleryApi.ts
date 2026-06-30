@@ -24,6 +24,7 @@ export type EmbedTheme = 'light' | 'dark' | 'system';
 export type EmbedDensity = 'compact' | 'comfortable';
 export type EmbedFrameStyle = 'minimal' | 'technical' | 'editorial';
 export type EmbedImageFit = 'cover' | 'contain';
+export type EmbedMetadataPlacement = 'bottom' | 'left' | 'right';
 
 export type EmbedFieldId =
   | 'camera'
@@ -41,6 +42,8 @@ export interface EmbedTemplate {
   density: EmbedDensity;
   frameStyle: EmbedFrameStyle;
   imageFit: EmbedImageFit;
+  metadataPlacement: EmbedMetadataPlacement;
+  showMetadata: boolean;
   defaultTargetFormatId: string;
   visibleFields: EmbedFieldId[];
   ctaLabel: string;

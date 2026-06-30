@@ -19,7 +19,7 @@ import {
   type ProcessedImage,
 } from '../../lib/imageProcessing';
 import { suggestGalleryMetadata, type GalleryMetadataSuggestion } from '../../lib/galleryMetadata';
-import { FORMATS } from '../../lib/engine';
+import { GALLERY_FORMAT_OPTIONS, formatOptionLabel } from '../../lib/galleryFormat';
 import { cameraFormat, defaultFocal, lensesForCamera, maxApertureAtFocal, type Camera, type CatalogLens } from '../../lib/gear';
 import { DEFAULT_SUBJECT_DISTANCE_PRESET_ID, SUBJECT_DISTANCE_PRESETS } from '../../lib/subjectDistance';
 import { useCatalog } from '../../store/CatalogProvider';
@@ -733,7 +733,7 @@ function dateInputValue(value?: string | null): string {
 }
 
 function normalizedFormatId(value: string): string {
-  return FORMATS.some((format) => format.id === value) ? value : 'ff';
+  return GALLERY_FORMAT_OPTIONS.some((format) => format.id === value) ? value : 'ff';
 }
 
 function formatBytes(value: number): string {
@@ -936,7 +936,7 @@ function FormatField({
   onChange: (value: string) => void;
   className?: string;
 }) {
-  const normalized = FORMATS.some((format) => format.id === value) ? value : 'ff';
+  const normalized = GALLERY_FORMAT_OPTIONS.some((format) => format.id === value) ? value : 'ff';
 
   return (
     <label className={`block ${className}`}>
@@ -946,9 +946,9 @@ function FormatField({
         onChange={(event) => onChange(event.target.value)}
         className="w-full border border-line bg-transparent px-2 py-1.5 text-xs outline-none focus:border-line-strong"
       >
-        {FORMATS.map((format) => (
+        {GALLERY_FORMAT_OPTIONS.map((format) => (
           <option key={format.id} value={format.id}>
-            {format.name}
+            {formatOptionLabel(format)}
           </option>
         ))}
       </select>

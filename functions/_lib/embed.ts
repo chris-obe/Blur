@@ -5,6 +5,7 @@ export type EmbedTheme = 'light' | 'dark' | 'system';
 export type EmbedDensity = 'compact' | 'comfortable';
 export type EmbedFrameStyle = 'minimal' | 'technical' | 'editorial';
 export type EmbedImageFit = 'cover' | 'contain';
+export type EmbedMetadataPlacement = 'bottom' | 'left' | 'right';
 
 export const EMBED_FIELD_IDS = [
   'camera',
@@ -25,6 +26,8 @@ export interface EmbedTemplate {
   density: EmbedDensity;
   frameStyle: EmbedFrameStyle;
   imageFit: EmbedImageFit;
+  metadataPlacement: EmbedMetadataPlacement;
+  showMetadata: boolean;
   defaultTargetFormatId: string;
   visibleFields: EmbedFieldId[];
   ctaLabel: string;
@@ -67,12 +70,14 @@ export interface GalleryAlbumPhotoInput {
 export const DEFAULT_EMBED_TEMPLATE: EmbedTemplate = {
   theme: 'light',
   density: 'comfortable',
-  frameStyle: 'technical',
-  imageFit: 'cover',
+  frameStyle: 'minimal',
+  imageFit: 'contain',
+  metadataPlacement: 'bottom',
+  showMetadata: true,
   defaultTargetFormatId: 'ff',
-  visibleFields: [...EMBED_FIELD_IDS],
+  visibleFields: ['camera', 'lens', 'focal', 'aperture', 'format', 'capturedAt'],
   ctaLabel: 'Open in blur',
-  showEquivalent: true,
+  showEquivalent: false,
 };
 
 export function publicJson(body: unknown, maxAge = 60) {
@@ -143,8 +148,10 @@ export function normalizeEmbedTemplate(input: unknown): EmbedTemplate {
     density: oneOf(value.density, ['compact', 'comfortable'], DEFAULT_EMBED_TEMPLATE.density),
     frameStyle: oneOf(value.frameStyle, ['minimal', 'technical', 'editorial'], DEFAULT_EMBED_TEMPLATE.frameStyle),
     imageFit: oneOf(value.imageFit, ['cover', 'contain'], DEFAULT_EMBED_TEMPLATE.imageFit),
+    metadataPlacement: oneOf(value.metadataPlacement, ['bottom', 'left', 'right'], DEFAULT_EMBED_TEMPLATE.metadataPlacement),
+    showMetadata: typeof value.showMetadata === 'boolean' ? value.showMetadata : DEFAULT_EMBED_TEMPLATE.showMetadata,
     defaultTargetFormatId: stringValue(value.defaultTargetFormatId, DEFAULT_EMBED_TEMPLATE.defaultTargetFormatId),
-    visibleFields: visible.length > 0 ? [...new Set(visible)] : DEFAULT_EMBED_TEMPLATE.visibleFields,
+    visibleFields: visible.length > 0 ? [...new Set(visible)].slice(0, 6) : DEFAULT_EMBED_TEMPLATE.visibleFields,
     ctaLabel: stringValue(value.ctaLabel, DEFAULT_EMBED_TEMPLATE.ctaLabel).slice(0, 80),
     showEquivalent: typeof value.showEquivalent === 'boolean' ? value.showEquivalent : DEFAULT_EMBED_TEMPLATE.showEquivalent,
   };
