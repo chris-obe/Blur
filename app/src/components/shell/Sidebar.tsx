@@ -53,22 +53,18 @@ function SidebarCollapseControl({
       onClick={onToggle}
       aria-label={`${label} sidebar`}
       className={[
-        'group relative mx-2 flex items-center py-2 text-xs uppercase tracking-wide text-muted transition-colors hover:text-fg',
-        collapsed ? 'justify-center px-0' : 'gap-3 px-3',
+        'group relative flex h-8 w-8 shrink-0 items-center justify-center border border-line text-muted transition-colors hover:border-fg hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
       ].join(' ')}
     >
       <Icon size={15} strokeWidth={1.5} />
-      {!collapsed && <span>{label}</span>}
-      {collapsed && (
-        <span
-          className={[
-            'pointer-events-none absolute left-[calc(100%+0.5rem)] top-1/2 z-50 -translate-y-1/2 border border-line bg-surface px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-fg opacity-0 shadow-none',
-            'transition-[opacity,transform] duration-150 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100',
-          ].join(' ')}
-        >
-          {label}
-        </span>
-      )}
+      <span
+        className={[
+          'pointer-events-none absolute left-[calc(100%+0.5rem)] top-1/2 z-50 -translate-y-1/2 border border-line bg-surface px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-fg opacity-0 shadow-none',
+          'transition-[opacity,transform] duration-150 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100',
+        ].join(' ')}
+      >
+        {label}
+      </span>
     </button>
   );
 }
@@ -93,8 +89,14 @@ export function Sidebar() {
         collapsed ? 'w-16' : 'w-52',
       ].join(' ')}
     >
-      <div className={['flex h-14 items-center border-b border-line', collapsed ? 'justify-center px-2' : 'px-4'].join(' ')}>
+      <div
+        className={[
+          'flex items-center border-b border-line',
+          collapsed ? 'h-20 flex-col justify-center gap-2 px-2' : 'h-14 justify-between px-4',
+        ].join(' ')}
+      >
         <BrandMark className={collapsed ? 'text-base' : ''} />
+        <SidebarCollapseControl collapsed={collapsed} onToggle={() => setCollapsed((current) => !current)} />
       </div>
 
       <nav className="flex flex-col py-2">
@@ -105,7 +107,6 @@ export function Sidebar() {
 
       {/* Footer: Admin (admins only) above Settings */}
       <div className="mt-auto border-t border-line py-2">
-        <SidebarCollapseControl collapsed={collapsed} onToggle={() => setCollapsed((current) => !current)} />
         <nav className="flex flex-col">
           {footer.map((item) => (
             <NavItem key={item.to} {...item} collapsed={collapsed} />
