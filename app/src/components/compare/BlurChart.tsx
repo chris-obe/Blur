@@ -5,7 +5,7 @@ import { Group } from '@visx/group';
 import { AxisBottom, AxisLeft } from '@visx/axis';
 import { localPoint } from '@visx/event';
 import { ParentSize } from '@visx/responsive';
-import { blurCurve } from '../../lib/engine';
+import { blurCurve, blurFraction } from '../../lib/engine';
 import { systemLabel, type CompareSystem } from '../../store/CompareProvider';
 
 // Monochrome differentiation: solid + three dash patterns. Caps at 4 systems.
@@ -193,32 +193,57 @@ export function DashSwatch({ index }: { index: number }) {
   );
 }
 
+// A curve at a fixed focus distance (same plane of focus for every system),
+// rather than framing by subject width. Built with blurFraction so the engine
+// stays untouched.
+function fixedFocusCurve(system: CompareSystem, focusM: number): Pt[] {
+  const start = Math.max(focusM * 1.002, MIN_M);
+  const logStart = Math.log10(start);
+  const logEnd = Math.log10(MAX_M);
+  if (logEnd <= logStart) return [];
+  const steps = 200;
+  const out: Pt[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const d = 10 ** (logStart + (logEnd - logStart) * (i / steps));
+    out.push({
+      distance: d,
+      blurPct: 100 * blurFraction({ format: system.format, focal: system.focal, aperture: system.aperture }, focusM, d),
+    });
+  }
+  return out;
+}
+
 export function BlurChart({
   systems,
   subjectWidthM,
+  focusOverrideM,
 }: {
   systems: CompareSystem[];
   subjectWidthM: number;
+  focusOverrideM: number | null;
 }) {
   const series: Series[] = useMemo(
     () =>
       systems.map((s) => ({
         id: s.id,
         label: systemLabel(s),
-        points: blurCurve(
-          { format: s.format, focal: s.focal, aperture: s.aperture },
-          subjectWidthM,
-          { axis: 'h', minM: MIN_M, maxM: MAX_M, steps: 200 },
-        ),
+        points:
+          focusOverrideM != null
+            ? fixedFocusCurve(s, focusOverrideM)
+            : blurCurve(
+                { format: s.format, focal: s.focal, aperture: s.aperture },
+                subjectWidthM,
+                { axis: 'h', minM: MIN_M, maxM: MAX_M, steps: 200 },
+              ),
       })),
-    [systems, subjectWidthM],
+    [systems, subjectWidthM, focusOverrideM],
   );
 
   return (
-    <div className="h-[360px] w-full border border-line">
+    <div className="h-full min-h-[320px] w-full border border-line">
       {systems.length === 0 ? (
         <div className="flex h-full items-center justify-center text-xs text-muted">
-          Add systems below to plot their background blur.
+          Add a system to plot its background blur.
         </div>
       ) : (
         <ParentSize>{({ width, height }) => <Inner width={width} height={height} series={series} />}</ParentSize>

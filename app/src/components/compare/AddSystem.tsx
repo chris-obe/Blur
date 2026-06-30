@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { FORMATS, getFormat, type Format } from '../../lib/engine';
+import { FORMATS, getFormat, cropFactor, type Format } from '../../lib/engine';
 import {
   apertureRangeLabel,
   cameraFormat,
@@ -77,20 +77,20 @@ function AddButton({ onClick, disabled }: { onClick: () => void; disabled?: bool
 
 function CameraMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
   const { cameras, lenses, status } = useCatalog();
-  const [camId, setCamId] = useState(cameras[0]?.id ?? '');
+  const [camId, setCamId] = useState(''); // (any) by default
   const cameraOptions = useMemo(
     () => cameras.map((c) => ({ id: c.id, label: c.name, maker: c.maker })),
     [cameras],
   );
-  const camera = cameras.find((c) => c.id === camId) ?? cameras[0];
+  const camera = cameras.find((c) => c.id === camId);
   const available = useMemo(() => (camera ? lensesForCamera(camera, lenses) : []), [camera, lenses]);
   const lensGroups = useMemo(() => groupByMaker(available), [available]);
-  const [lensId, setLensId] = useState(available[0]?.id ?? '');
-  const lens = available.find((l) => l.id === lensId) ?? available[0];
+  const [lensId, setLensId] = useState(''); // (any) by default
+  const lens = available.find((l) => l.id === lensId);
 
-  // controlled focal/aperture, re-seeded when the lens changes
-  const [focal, setFocal] = useState(lens ? defaultFocal(lens) : 50);
-  const [aperture, setAperture] = useState(lens ? maxApertureAtFocal(lens, focal) : 1.8);
+  // controlled focal/aperture, re-seeded when the chosen lens changes
+  const [focal, setFocal] = useState(50);
+  const [aperture, setAperture] = useState(1.8);
   const [lastLens, setLastLens] = useState(lens?.id);
   if (lens && lens.id !== lastLens) {
     setLastLens(lens.id);
@@ -100,9 +100,7 @@ function CameraMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
 
   const onCam = (id: string) => {
     setCamId(id);
-    const cam = cameras.find((c) => c.id === id);
-    const first = cam ? lensesForCamera(cam, lenses)[0] : undefined;
-    setLensId(first?.id ?? '');
+    setLensId(''); // reset lens to (any) when the body changes
   };
 
   const submit = () => {
@@ -125,12 +123,18 @@ function CameraMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
             options={cameraOptions}
             value={camId}
             onChange={onCam}
-            placeholder={status === 'loading' ? 'Loading catalog…' : 'Search cameras…'}
+            placeholder={status === 'loading' ? 'Loading catalog…' : '(Any camera)'}
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="label">Lens ({available.length} available)</span>
-          <select className={fieldCls} value={lensId} onChange={(e) => setLensId(e.target.value)}>
+          <span className="label">Lens {camera ? `(${available.length} available)` : ''}</span>
+          <select
+            className={fieldCls}
+            value={lensId}
+            disabled={!camera}
+            onChange={(e) => setLensId(e.target.value)}
+          >
+            <option value="">(Any lens)</option>
             {lensGroups.map(([maker, lenses]) => (
               <optgroup key={maker} label={maker}>
                 {lenses.map((l) => (
@@ -176,9 +180,13 @@ function KitMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
       const targets = bodies.length ? bodies : [null];
       for (const body of targets) {
         const formatId = body?.formatId ?? lens.coversFormatIds[0] ?? 'ff';
+        const fmt = getFormat(formatId);
+        const bodyName = body ? body.name : shortFmt(fmt);
+        // camera · lens · crop factor
+        const label = `${bodyName} · ${lens.name} · ${cropFactor(fmt).toFixed(1)}×`;
         out.push({
           id: `${lens.id}|${body?.id ?? 'native'}`,
-          label: `${lens.name}${body ? ` · ${body.name}` : ''}`,
+          label,
           formatId,
           focalMin: lens.focalMin,
           focalMax: lens.focalMax,
@@ -192,10 +200,10 @@ function KitMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
     return out;
   }, [cameras, lenses]);
 
-  const [comboId, setComboId] = useState(combos[0]?.id ?? '');
-  const combo = combos.find((c) => c.id === comboId) ?? combos[0];
-  const [focal, setFocal] = useState(combo?.focalMin ?? 50);
-  const [aperture, setAperture] = useState(combo ? maxApertureAtFocal(combo, combo.focalMin) : 1.8);
+  const [comboId, setComboId] = useState(''); // (any) by default
+  const combo = combos.find((c) => c.id === comboId);
+  const [focal, setFocal] = useState(50);
+  const [aperture, setAperture] = useState(1.8);
   const [last, setLast] = useState(combo?.id);
   if (combo && combo.id !== last) {
     setLast(combo.id);
@@ -206,15 +214,17 @@ function KitMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
   if (combos.length === 0)
     return <div className="text-xs text-muted">Your kit is empty. Add a camera and lenses in My Kit.</div>;
 
-  const fmt = getFormat(combo.formatId);
-  const submit = () =>
-    onAdd({ id: nextSystemId(), context: combo.label, format: fmt, focal, aperture });
+  const submit = () => {
+    if (!combo) return;
+    onAdd({ id: nextSystemId(), context: combo.label, format: getFormat(combo.formatId), focal, aperture });
+  };
 
   return (
     <div className="space-y-3">
       <label className="flex flex-col gap-1">
-        <span className="label">Body + lens from your kit</span>
+        <span className="label">Body + lens + crop from your kit</span>
         <select className={fieldCls} value={comboId} onChange={(e) => setComboId(e.target.value)}>
+          <option value="">(Any from kit)</option>
           {combos.map((c) => (
             <option key={c.id} value={c.id}>
               {c.label}
@@ -222,31 +232,28 @@ function KitMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
           ))}
         </select>
       </label>
-      <FocalAperture lens={combo} focal={focal} aperture={aperture} setFocal={setFocal} setAperture={setAperture} />
-      <AddButton onClick={submit} />
+      {combo && <FocalAperture lens={combo} focal={focal} aperture={aperture} setFocal={setFocal} setAperture={setAperture} />}
+      <AddButton onClick={submit} disabled={!combo} />
     </div>
   );
 }
 
 function ManualMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
-  const [formatId, setFormatId] = useState('ff');
+  const [formatId, setFormatId] = useState(''); // (any) by default
   const [focal, setFocal] = useState(50);
   const [aperture, setAperture] = useState(1.8);
-  const fmt = getFormat(formatId);
-  const submit = () =>
-    onAdd({
-      id: nextSystemId(),
-      context: shortFmt(fmt),
-      format: fmt,
-      focal,
-      aperture,
-    });
+  const fmt = formatId ? getFormat(formatId) : undefined;
+  const submit = () => {
+    if (!fmt) return;
+    onAdd({ id: nextSystemId(), context: shortFmt(fmt), format: fmt, focal, aperture });
+  };
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-3 gap-2">
         <label className="flex flex-col gap-1">
           <span className="label">Format</span>
           <select className={fieldCls} value={formatId} onChange={(e) => setFormatId(e.target.value)}>
+            <option value="">(Any format)</option>
             {FORMATS.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.name}
@@ -263,7 +270,7 @@ function ManualMode({ onAdd }: { onAdd: (s: CompareSystem) => void }) {
           <NumberField value={aperture} onCommit={setAperture} min={0.7} step={0.1} className={fieldCls} />
         </label>
       </div>
-      <AddButton onClick={submit} />
+      <AddButton onClick={submit} disabled={!fmt} />
     </div>
   );
 }
