@@ -8,11 +8,14 @@ import {
   Download,
   HardDrive,
   ImagePlus,
+  Info,
   RefreshCw,
   Shield,
   SlidersHorizontal,
   ThumbsUp,
   UserCog,
+  Wrench,
+  X,
   XCircle,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
@@ -613,53 +616,79 @@ function CatalogSection({
         </Panel>
 
         <Panel title="Build controls" icon={RefreshCw}>
-          <div className="space-y-4">
-            <div className="border border-line p-3">
-              <div className="label mb-2">Auto-rebuild</div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={!!status?.settings.autoRefreshEnabled}
-                onClick={onToggleAutoRefresh}
-                disabled={!status || loading || saving}
-                className="flex w-full items-center justify-between gap-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <span>{status?.settings.autoRefreshEnabled ? 'Enabled' : 'Disabled'}</span>
-                <span
-                  className={[
-                    'inline-flex h-6 w-10 items-center border transition-colors',
-                    status?.settings.autoRefreshEnabled
-                      ? 'justify-end border-fg bg-fg'
-                      : 'justify-start border-line bg-transparent',
-                  ].join(' ')}
+          <div className="grid min-h-[9rem] gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="flex min-w-0 flex-col justify-between border border-line p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="label mb-2">Auto-rebuild</div>
+                  <div className="truncate text-sm font-bold">
+                    {status?.settings.autoRefreshEnabled ? 'Enabled' : 'Disabled'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!status?.settings.autoRefreshEnabled}
+                  title="Toggle automatic catalog rebuilds"
+                  onClick={onToggleAutoRefresh}
+                  disabled={!status || loading || saving}
+                  className="inline-flex h-8 w-14 shrink-0 items-center border border-line p-1 transition-colors hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <span className={['m-1 h-3.5 w-3.5', status?.settings.autoRefreshEnabled ? 'bg-bg' : 'bg-fg'].join(' ')} />
-                </span>
-              </button>
+                  <span
+                    className={[
+                      'h-5 w-5 transition-transform',
+                      status?.settings.autoRefreshEnabled ? 'translate-x-6 bg-fg' : 'translate-x-0 bg-muted',
+                    ].join(' ')}
+                  />
+                </button>
+              </div>
+
+              <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                <label className="min-w-0">
+                  <span className="label mb-1 block">Interval days</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={draftDays}
+                    title="Days between automatic rebuild attempts"
+                    onChange={(event) => setDraftDays(Number(event.target.value))}
+                    className="h-9 w-full border border-line bg-transparent px-3 text-sm outline-none focus:border-line-strong"
+                  />
+                </label>
+                <button
+                  type="button"
+                  title="Save rebuild interval"
+                  aria-label="Save rebuild interval"
+                  onClick={() => onUpdateInterval(draftDays)}
+                  disabled={!status || loading || saving || draftDays < 1 || draftDays > 365}
+                  className="mt-auto flex h-9 w-9 items-center justify-center border border-line transition-colors hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <CheckCircle2 size={14} strokeWidth={1.5} />
+                </button>
+              </div>
             </div>
 
-            <label className="block border border-line p-3">
-              <span className="label mb-2 block">Rebuild interval</span>
-              <input
-                type="number"
-                min={1}
-                max={365}
-                value={draftDays}
-                onChange={(event) => setDraftDays(Number(event.target.value))}
-                className="mb-3 h-9 w-full border border-line bg-transparent px-3 text-sm outline-none focus:border-line-strong"
-              />
-              <Button
-                onClick={() => onUpdateInterval(draftDays)}
-                disabled={!status || loading || saving || draftDays < 1 || draftDays > 365}
+            <div className="grid grid-cols-2 gap-2 sm:w-24 sm:grid-cols-1">
+              <button
+                type="button"
+                title="Rebuild catalog now"
+                aria-label="Rebuild catalog now"
+                onClick={onRefreshNow}
+                disabled={loading || saving}
+                className="flex min-h-16 items-center justify-center border border-fg bg-fg text-bg transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Save days
-              </Button>
-            </label>
-
-            <Button variant="solid" onClick={onRefreshNow} disabled={loading || saving}>
-              <RefreshCw size={14} strokeWidth={1.5} />
-              Rebuild catalog
-            </Button>
+                <RefreshCw size={18} strokeWidth={1.5} />
+              </button>
+              <button
+                type="button"
+                title="Build controls affect the Cloudflare catalog refresh worker"
+                aria-label="Catalog build control help"
+                className="flex min-h-16 items-center justify-center border border-line text-muted transition-colors hover:border-line-strong hover:text-fg"
+              >
+                <Info size={18} strokeWidth={1.5} />
+              </button>
+            </div>
           </div>
         </Panel>
       </div>
@@ -754,6 +783,11 @@ function CatalogDatasetViewer({
 
   const selected = source === 'cloudflare' ? cloudCatalogExport : appCatalogRaw;
   const selectedLabel = source === 'cloudflare' ? 'Worker/R2 latest export' : 'App-loaded export';
+  const selectedDetail = selected?.generatedAt
+    ? `${formatDate(selected.generatedAt)} · ${source === 'cloudflare' ? 'Canonical published export' : appCatalogSource}`
+    : source === 'cloudflare'
+      ? 'Canonical published export'
+      : appCatalogSource;
   const scopedValue = useMemo(() => catalogScopeValue(selected, scope), [scope, selected]);
   const jsonText = selected ? JSON.stringify(scopedValue, null, 2) : '';
   const summary = catalogExportSummary(selected);
@@ -852,7 +886,7 @@ function CatalogDatasetViewer({
         <div className="grid gap-3 border border-line p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(13rem,0.6fr)_minmax(0,1fr)]">
             <label className="block">
-              <span className="label mb-2 block">Diagnostic source</span>
+              <span className="label mb-2 block">Viewing</span>
               <select
                 value={source}
                 onChange={(event) => setSource(event.target.value as CatalogDatasetSource)}
@@ -861,9 +895,8 @@ function CatalogDatasetViewer({
                 <option value="cloudflare">Canonical Worker/R2 export</option>
                 <option value="app">App-loaded fallback/runtime export</option>
               </select>
-              <span className="mt-1 block text-[11px] text-muted">
-                Compare deployed data against the app-loaded copy.
-              </span>
+              <span className="mt-1 block truncate text-[11px] text-muted">{selectedLabel}</span>
+              <span className="block truncate text-[11px] text-muted">{selectedDetail}</span>
             </label>
             <div>
               <span className="label mb-2 block">Dataset table</span>
@@ -1078,13 +1111,9 @@ function CatalogWorkerSummary({
 }
 
 function CatalogIntegrityStrip({
-  selected,
-  selectedLabel,
-  appCatalogSource,
   appSummary,
   cloudSummary,
   status,
-  source,
   summary,
 }: {
   selected: CatalogLatestExport | null;
@@ -1096,44 +1125,53 @@ function CatalogIntegrityStrip({
   source: CatalogDatasetSource;
   summary: ReturnType<typeof catalogExportSummary>;
 }) {
+  const [activeInsight, setActiveInsight] = useState<'cameras' | 'lenses' | 'bindings' | 'drift' | null>(null);
   const run = status?.lastSuccess ?? status?.lastRun ?? null;
-  const sourceDetail = source === 'cloudflare' ? 'Canonical published export' : appCatalogSource;
   const drift = compareExportSummaries(appSummary, cloudSummary);
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <IntegrityMetric
-          label="Viewing"
-          value={selected ? selectedLabel : 'No export'}
-          detail={selected?.generatedAt ? `${formatDate(selected.generatedAt)} · ${sourceDetail}` : sourceDetail}
-          tone={selected ? 'ok' : 'neutral'}
-        />
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <IntegrityMetric
           label="Cameras"
           value={String(summary.cameras)}
           detail={runCountDetail(run?.camera_count, summary.cameras)}
           tone={countTone(summary.cameras, run?.camera_count)}
+          active={activeInsight === 'cameras'}
+          onClick={() => setActiveInsight((current) => current === 'cameras' ? null : 'cameras')}
         />
         <IntegrityMetric
           label="Lenses"
           value={String(summary.lenses)}
           detail={runCountDetail(run?.lens_count, summary.lenses)}
           tone={countTone(summary.lenses, run?.lens_count)}
+          active={activeInsight === 'lenses'}
+          onClick={() => setActiveInsight((current) => current === 'lenses' ? null : 'lenses')}
         />
         <IntegrityMetric
           label="Bindings"
           value={String(summary.bindings)}
           detail={runCountDetail(run?.binding_count, summary.bindings)}
           tone={countTone(summary.bindings, run?.binding_count)}
+          active={activeInsight === 'bindings'}
+          onClick={() => setActiveInsight((current) => current === 'bindings' ? null : 'bindings')}
         />
         <IntegrityMetric
           label="Source drift"
           value={drift.ok ? 'Aligned' : 'Mismatch'}
           detail={drift.detail}
           tone={drift.ok ? 'ok' : 'bad'}
+          active={activeInsight === 'drift'}
+          onClick={() => setActiveInsight((current) => current === 'drift' ? null : 'drift')}
         />
       </div>
-      <SourceTypeMatrix summary={summary} />
+      {activeInsight && (
+        <SourceInsightPanel
+          insight={activeInsight}
+          summary={summary}
+          drift={drift}
+          onClose={() => setActiveInsight(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1143,46 +1181,121 @@ function IntegrityMetric({
   value,
   detail,
   tone,
+  active,
+  onClick,
 }: {
   label: string;
   value: string;
   detail: string;
   tone: 'ok' | 'bad' | 'neutral';
+  active?: boolean;
+  onClick?: () => void;
 }) {
   const Icon = tone === 'ok' ? CheckCircle2 : tone === 'bad' ? XCircle : AlertTriangle;
-  return (
-    <div className={['border p-3', tone === 'bad' ? 'border-line-strong bg-faint' : 'border-line'].join(' ')}>
+  const interactive = !!onClick;
+  const content = (
+    <>
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="label">{label}</div>
-        <Icon size={14} strokeWidth={1.5} className={tone === 'bad' ? 'text-fg' : 'text-muted'} />
+        <span className="flex items-center gap-2">
+          {interactive && <Wrench size={12} strokeWidth={1.5} className="text-muted" />}
+          <Icon size={14} strokeWidth={1.5} className={tone === 'bad' ? 'text-fg' : 'text-muted'} />
+        </span>
       </div>
       <div className="truncate text-lg font-bold tracking-tight">{value}</div>
       <div className="mt-1 truncate text-xs text-muted">{detail}</div>
+    </>
+  );
+  if (interactive) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={`Show ${label.toLowerCase()} provenance`}
+        className={[
+          'w-full border p-3 text-left transition-colors hover:border-line-strong hover:bg-faint',
+          tone === 'bad' || active ? 'border-line-strong bg-faint' : 'border-line',
+        ].join(' ')}
+      >
+        {content}
+      </button>
+    );
+  }
+  return (
+    <div className={['border p-3', tone === 'bad' ? 'border-line-strong bg-faint' : 'border-line'].join(' ')}>
+      {content}
     </div>
   );
 }
 
-function SourceTypeMatrix({ summary }: { summary: ReturnType<typeof catalogExportSummary> }) {
-  const rows = [
-    ['Cameras', summary.cameraSourceTypes],
-    ['Lenses', summary.lensSourceTypes],
-  ] as const;
+function SourceInsightPanel({
+  insight,
+  summary,
+  drift,
+  onClose,
+}: {
+  insight: 'cameras' | 'lenses' | 'bindings' | 'drift';
+  summary: ReturnType<typeof catalogExportSummary>;
+  drift: ReturnType<typeof compareExportSummaries>;
+  onClose: () => void;
+}) {
+  const title = insight === 'drift'
+    ? 'Source drift'
+    : insight === 'bindings'
+      ? 'Bindings'
+      : `${insight[0].toUpperCase()}${insight.slice(1)} provenance mix`;
+  const rows = insight === 'cameras'
+    ? [['Cameras', summary.cameraSourceTypes] as const]
+    : insight === 'lenses'
+      ? [['Lenses', summary.lensSourceTypes] as const]
+      : [];
   return (
-    <div className="grid gap-3 border border-line p-3 lg:grid-cols-[9rem_minmax(0,1fr)]">
-      <div>
-        <div className="label mb-1">Provenance mix</div>
-        <div className="text-xs text-muted">Per entity, not combined totals.</div>
-      </div>
-      <div className="grid gap-2 md:grid-cols-2">
-        {rows.map(([label, counts]) => (
-          <div key={label} className="grid grid-cols-[5rem_repeat(3,minmax(0,1fr))] items-center gap-2 text-xs">
-            <div className="font-bold">{label}</div>
-            <SourceTypePill label="External" value={counts.external} />
-            <SourceTypePill label="Derived" value={counts.derived} />
-            <SourceTypePill label="Curated" value={counts.curated} />
+    <div className="border border-line p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <div className="label mb-1">{title}</div>
+          <div className="text-xs text-muted">
+            {insight === 'drift'
+              ? drift.detail
+              : insight === 'bindings'
+                ? 'Catalog binding totals and fixed-lens coverage.'
+                : 'Per entity, not combined totals.'}
           </div>
-        ))}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          title="Collapse provenance panel"
+          aria-label="Collapse provenance panel"
+          className="flex h-8 w-8 items-center justify-center border border-line text-muted transition-colors hover:border-line-strong hover:text-fg"
+        >
+          <X size={14} strokeWidth={1.5} />
+        </button>
       </div>
+      {rows.length > 0 && (
+        <div className="grid gap-2 md:grid-cols-2">
+          {rows.map(([label, counts]) => (
+            <div key={label} className="grid grid-cols-[5rem_repeat(3,minmax(0,1fr))] items-center gap-2 text-xs">
+              <div className="font-bold">{label}</div>
+              <SourceTypePill label="External" value={counts.external} />
+              <SourceTypePill label="Derived" value={counts.derived} />
+              <SourceTypePill label="Curated" value={counts.curated} />
+            </div>
+          ))}
+        </div>
+      )}
+      {insight === 'bindings' && (
+        <div className="grid gap-2 text-xs md:grid-cols-3">
+          <SourceTypePill label="Bindings" value={summary.bindings} />
+          <SourceTypePill label="Sources" value={summary.sources} />
+          <SourceTypePill label="Cameras" value={summary.cameras} />
+        </div>
+      )}
+      {insight === 'drift' && (
+        <div className="border border-line bg-faint p-3 text-xs">
+          {drift.ok ? 'App-loaded and Worker/R2 export counts are aligned.' : drift.detail}
+        </div>
+      )}
     </div>
   );
 }
