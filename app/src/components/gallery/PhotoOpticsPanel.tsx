@@ -1,21 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  AlertTriangle,
-  Aperture,
-  Ban,
-  Calendar,
-  Camera,
-  Check,
-  Clock3,
-  Crop,
-  Gauge,
-  Image,
-  MoveDiagonal,
-  Ruler,
-  ScanSearch,
-  UsersRound,
-  type LucideIcon,
-} from 'lucide-react';
+import { AlertTriangle, Ban, Check } from 'lucide-react';
 import { cropFactor, diagonal, type Format } from '../../lib/engine';
 import { GALLERY_FORMAT_OPTIONS, formatDisplayName, formatOptionLabel } from '../../lib/galleryFormat';
 import { computeMatch } from '../../lib/match';
@@ -28,13 +12,7 @@ const DEFAULT_TARGET_FORMAT_ID = 'ff';
 const EMPTY_KIT: Kit = { cameras: [], lenses: [] };
 const ALL_FIELDS: EmbedFieldId[] = ['camera', 'lens', 'focal', 'aperture', 'shutter', 'iso', 'capturedAt', 'format', 'subject'];
 
-type FactDefinition = {
-  id: EmbedFieldId;
-  icon: LucideIcon;
-  label: string;
-  value: string | null | undefined;
-};
-
+type FactDefinition = { id: EmbedFieldId; label: string; value: string | null | undefined };
 type ResolvedFact = FactDefinition & { value: string };
 
 interface FooterState {
@@ -87,69 +65,73 @@ export function PhotoOpticsPanel({
     ?? GALLERY_FORMAT_OPTIONS[0];
   const m = computeMatch(format, focal, aperture, kit, targetFormat, entry.subjectWidthM ?? 2);
   const subject = subjectPresetById(entry.subjectPreset)?.label;
+
   const identityCandidates: FactDefinition[] = [
-    { id: 'camera', icon: Camera, label: 'Camera', value: entry.camera },
-    { id: 'lens', icon: ScanSearch, label: 'Lens', value: entry.lens },
+    { id: 'camera', label: 'Camera', value: entry.camera },
+    { id: 'lens', label: 'Lens', value: entry.lens },
   ];
   const identityStats = identityCandidates.filter(
     (stat): stat is ResolvedFact => showIdentityFields && visible.has(stat.id) && Boolean(stat.value),
   );
+
   const captureCandidates: FactDefinition[] = [
-    { id: 'focal', icon: Ruler, label: 'Focal length', value: `${Math.round(focal)} mm` },
-    { id: 'aperture', icon: Aperture, label: 'Shot aperture', value: `f/${aperture.toFixed(1)}` },
-    { id: 'shutter', icon: Clock3, label: 'Shutter', value: entry.shutterSpeed },
-    { id: 'iso', icon: Gauge, label: 'ISO', value: entry.iso ? String(entry.iso) : undefined },
-    { id: 'capturedAt', icon: Calendar, label: 'Captured', value: formatDate(entry.capturedAt) },
-    { id: 'format', icon: Image, label: 'Format', value: formatDisplayName(format) },
-    { id: 'subject', icon: UsersRound, label: 'Framing', value: subject },
+    { id: 'focal', label: 'Focal length', value: `${Math.round(focal)} mm` },
+    { id: 'aperture', label: 'Aperture', value: `ƒ/${aperture.toFixed(1)}` },
+    { id: 'format', label: 'Format', value: formatDisplayName(format) },
+    { id: 'subject', label: 'Framing', value: subject },
+    { id: 'shutter', label: 'Shutter', value: entry.shutterSpeed },
+    { id: 'iso', label: 'ISO', value: entry.iso ? String(entry.iso) : undefined },
+    { id: 'capturedAt', label: 'Captured', value: formatDate(entry.capturedAt) },
   ];
   const captureStats = captureCandidates.filter(
     (stat): stat is ResolvedFact => visible.has(stat.id) && Boolean(stat.value),
   );
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        {entry.guessed && (
-          <select
-            value={format.id}
-            onChange={(event) => {
-              const next = options.find((f) => f.id === event.target.value);
-              if (next) setFormat(next);
-            }}
-            className="mb-2 w-full border border-line bg-transparent px-2 py-1.5 text-xs outline-none focus:border-line-strong"
-          >
-            {options.map((f) => (
-              <option key={f.id} value={f.id}>
-                {formatOptionLabel(f)}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {identityStats.length > 0 && (
-          <div className="divide-y divide-line border border-line">
-            {identityStats.map((stat) => (
-              <FactRow key={stat.id} icon={stat.icon} label={stat.label} value={stat.value} />
-            ))}
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-2">
-          {captureStats.map((stat) => (
-            <FactTile key={stat.id} icon={stat.icon} label={stat.label} value={stat.value} />
+    <div className="space-y-3 text-sm">
+      {entry.guessed && (
+        <select
+          value={format.id}
+          onChange={(event) => {
+            const next = options.find((f) => f.id === event.target.value);
+            if (next) setFormat(next);
+          }}
+          className="h-9 w-full border border-line bg-transparent px-2 text-xs outline-none focus:border-line-strong"
+        >
+          {options.map((f) => (
+            <option key={f.id} value={f.id}>
+              {formatOptionLabel(f)}
+            </option>
           ))}
-          <FactTile icon={Crop} label="Field of view" value={`${Math.round(m.fov.h)} deg`} />
-          <SensorCell fmt={format} />
+        </select>
+      )}
+
+      {identityStats.length > 0 && (
+        <div className="divide-y divide-line border border-line">
+          {identityStats.map((stat) => (
+            <div key={stat.id} className="flex items-baseline gap-3 px-3 py-1.5">
+              <span className="label w-12 shrink-0">{stat.label}</span>
+              <span className="min-w-0 flex-1 break-words font-bold leading-snug">{stat.value}</span>
+            </div>
+          ))}
         </div>
+      )}
+
+      {/* capture facts — tight label/value stat grid */}
+      <div className="grid grid-cols-2 gap-px border border-line bg-line">
+        {captureStats.map((stat) => (
+          <Stat key={stat.id} label={stat.label} value={stat.value} />
+        ))}
+        <Stat label="Field of view" value={`${Math.round(m.fov.h)}°`} />
+        <SensorCell fmt={format} />
       </div>
 
-      <label className="block border border-line px-3 py-2">
-        <span className="label mb-2 block">Equivalent format</span>
+      <label className="flex items-center justify-between gap-2 border border-line px-3 py-2">
+        <span className="label shrink-0">Equivalent on</span>
         <select
           value={targetFormat.id}
           onChange={(event) => setTargetFormatId(event.target.value)}
-          className="w-full bg-transparent text-sm font-bold outline-none"
+          className="min-w-0 flex-1 cursor-pointer bg-transparent text-right text-sm font-bold outline-none"
         >
           {GALLERY_FORMAT_OPTIONS.map((f) => (
             <option key={f.id} value={f.id}>
@@ -160,17 +142,17 @@ export function PhotoOpticsPanel({
       </label>
 
       {showEquivalent && (
-        <div className="border border-line-strong p-4">
-          <div className="label mb-2">{equivalentLabel(targetFormat)}</div>
+        <div className="border border-line-strong px-3 py-3">
+          <div className="label mb-1">{equivalentLabel(targetFormat)}</div>
           <div className="text-2xl font-bold tracking-tight tabular-nums">
-            {r1(m.equivalent.target.focal)}mm · f/{r1(m.equivalent.target.aperture)}
+            {r1(m.equivalent.target.focal)}mm · ƒ/{r1(m.equivalent.target.aperture)}
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
-        <FactTile icon={Crop} label="Crop factor" value={`${cropFactor(targetFormat).toFixed(2)}x`} />
-        <FactTile icon={Aperture} label="Background blur at 50 m" value={`${r1(m.blurFar)}%`} />
+      <div className="grid grid-cols-2 gap-px border border-line bg-line">
+        <Stat label="Crop factor" value={`${cropFactor(targetFormat).toFixed(2)}×`} />
+        <Stat label="Bg blur · 50 m" value={`${r1(m.blurFar)}%`} />
       </div>
 
       {showKitVerdict && <KitVerdict verdict={m.kitEval.verdict} />}
@@ -179,39 +161,26 @@ export function PhotoOpticsPanel({
   );
 }
 
-function FactRow({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+// Compact label/value cell. Cells share hairlines via the parent grid's gap-px
+// over a bg-line, so there's no doubled border or wasted padding.
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-3 px-3 py-3" title={label}>
-      <Icon size={15} strokeWidth={1.5} className="mt-0.5 text-muted" aria-hidden="true" />
-      <div className="min-w-0 break-words text-sm font-bold leading-snug">{value}</div>
-    </div>
-  );
-}
-
-function FactTile({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
-  return (
-    <div className="min-w-0 border border-line px-3 py-2.5" title={label} aria-label={`${label}: ${value}`}>
-      <Icon size={14} strokeWidth={1.5} className="mb-2 text-muted" aria-hidden="true" />
-      <div className="min-h-[2.25rem] break-words text-sm font-bold leading-tight tabular-nums">{value}</div>
+    <div className="min-w-0 bg-bg px-3 py-2">
+      <div className="label mb-0.5">{label}</div>
+      <div className="break-words text-sm font-bold leading-tight tabular-nums">{value}</div>
     </div>
   );
 }
 
 function SensorCell({ fmt }: { fmt: Format }) {
   const diag = diagonal(fmt);
+  const value = isSmallSensor(fmt)
+    ? `Type ${sensorType(diag)} · ${(fmt.w * fmt.h).toFixed(1)} mm²`
+    : `${formatDisplayName(fmt)} · ⌀ ${diag.toFixed(1)} mm`;
   return (
-    <div className="min-w-0 border border-line px-3 py-2.5 md:col-span-2" title="Sensor size">
-      <MoveDiagonal size={14} strokeWidth={1.5} className="mb-2 text-muted" aria-hidden="true" />
-      {isSmallSensor(fmt) ? (
-        <div className="break-words text-sm font-bold leading-tight tabular-nums">
-          Type {sensorType(diag)} <span className="font-normal text-muted">({(fmt.w * fmt.h).toFixed(1)} mm2)</span>
-        </div>
-      ) : (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold leading-tight">
-          <span className="min-w-0 break-words">{formatDisplayName(fmt)}</span>
-          <span className="font-normal text-muted tabular-nums">{diag.toFixed(1)} mm</span>
-        </div>
-      )}
+    <div className="col-span-2 min-w-0 bg-bg px-3 py-2">
+      <div className="label mb-0.5">Sensor</div>
+      <div className="break-words text-sm font-bold leading-tight">{value}</div>
     </div>
   );
 }
@@ -226,16 +195,14 @@ function KitVerdict({ verdict }: { verdict: ReturnType<typeof computeMatch>['kit
   const inverted = verdict.status === 'covered';
 
   return (
-    <div className={['border p-4', inverted ? 'border-line-strong bg-fg text-bg' : 'border-line'].join(' ')}>
-      <div className="mb-2 flex items-center gap-2">
-        <Icon size={15} strokeWidth={1.75} />
+    <div className={['border p-3', inverted ? 'border-line-strong bg-fg text-bg' : 'border-line'].join(' ')}>
+      <div className="mb-1.5 flex items-center gap-2">
+        <Icon size={14} strokeWidth={1.75} />
         <span className="text-xs font-bold uppercase tracking-wide">{label}</span>
       </div>
       <div className="text-xs leading-relaxed">{verdict.note}</div>
       {verdict.status !== 'covered' && (
-        <div className={['label mt-2', inverted ? 'text-bg/70' : ''].join(' ')}>
-          See Suggestions for what to buy
-        </div>
+        <div className={['label mt-1.5', inverted ? 'text-bg/70' : ''].join(' ')}>See Suggestions for what to buy</div>
       )}
     </div>
   );
