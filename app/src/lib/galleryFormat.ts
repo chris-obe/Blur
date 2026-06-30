@@ -1,4 +1,4 @@
-import { FORMATS, getFormat, type Format } from './engine';
+import { FORMATS, cropFactor, getFormat, type Format } from './engine';
 
 export const GALLERY_FORMAT_IDS = new Set([
   'mft',
@@ -25,7 +25,7 @@ export const GALLERY_FORMAT_IDS = new Set([
   'phone-1-2.55',
 ]);
 
-const GALLERY_FORMATS = FORMATS.filter((format) => GALLERY_FORMAT_IDS.has(format.id));
+export const GALLERY_FORMAT_OPTIONS = FORMATS.filter((format) => GALLERY_FORMAT_IDS.has(format.id));
 
 export interface GalleryFormatResolution {
   format: Format;
@@ -49,9 +49,18 @@ export function canonicalGalleryFormat(format: Format | null | undefined, option
   if (!format) return getFormat('ff');
   if (GALLERY_FORMAT_IDS.has(format.id)) return getFormat(format.id);
 
-  return GALLERY_FORMATS.reduce((best, candidate) => (
+  return GALLERY_FORMAT_OPTIONS.reduce((best, candidate) => (
     galleryFormatScore(format, candidate, options) < galleryFormatScore(format, best, options) ? candidate : best
   ), getFormat('ff'));
+}
+
+export function formatDisplayName(format: Format): string {
+  return format.name;
+}
+
+export function formatOptionLabel(format: Format, { includeCropFactor = true }: { includeCropFactor?: boolean } = {}): string {
+  if (!includeCropFactor) return formatDisplayName(format);
+  return `${formatDisplayName(format)} - ${cropFactor(format).toFixed(2)}x`;
 }
 
 function galleryFormatScore(source: Format, candidate: Format, options: CanonicalGalleryFormatOptions): number {

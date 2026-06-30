@@ -29,6 +29,7 @@ export function LightboxInfo({ entry }: { entry: ViewEntry }) {
         entry={entry}
         kit={{ cameras, lenses }}
         showKitVerdict
+        showIdentityFields={false}
         renderFooter={({ format, focal, aperture }) => (
           <button
             type="button"

@@ -20,11 +20,14 @@ interface Props<T extends PhotoLightboxEntry> {
 }
 
 const FRAME_SPRING = { type: 'spring', stiffness: 320, damping: 34 } as const;
+const LIGHTBOX_EASE = [0.22, 1, 0.36, 1] as const;
+const FADE_DURATION = 0.2;
+const PANEL_DURATION = 0.24;
 
 const slide = {
-  enter: (d: number) => ({ x: d >= 0 ? 36 : -36, opacity: 0 }),
+  enter: (d: number) => ({ x: d >= 0 ? 28 : -28, opacity: 0 }),
   center: { x: 0, opacity: 1 },
-  exit: (d: number) => ({ x: d >= 0 ? -36 : 36, opacity: 0 }),
+  exit: (d: number) => ({ x: d >= 0 ? -28 : 28, opacity: 0 }),
 };
 
 function flip(target: DOMRect, base: DOMRect) {
@@ -68,8 +71,8 @@ export function PhotoLightbox<T extends PhotoLightboxEntry>({
 
   useLayoutEffect(() => {
     const frame = frameRef.current;
-    if (backdropRef.current) animate(backdropRef.current, { opacity: [0, 1] }, { duration: 0.2 });
-    if (panelRef.current) animate(panelRef.current, { opacity: [0, 1], x: [12, 0] }, { duration: 0.22 });
+    if (backdropRef.current) animate(backdropRef.current, { opacity: [0, 1] }, { duration: FADE_DURATION, ease: LIGHTBOX_EASE });
+    if (panelRef.current) animate(panelRef.current, { opacity: [0, 1], x: [18, 0] }, { duration: PANEL_DURATION, ease: LIGHTBOX_EASE });
     if (!frame) return;
     const origin = morphRef.current && getAnchorRect ? getAnchorRect(currentIdRef.current!) : null;
     if (origin) {
@@ -80,7 +83,7 @@ export function PhotoLightbox<T extends PhotoLightboxEntry>({
         FRAME_SPRING,
       );
     } else {
-      animate(frame, { opacity: [0, 1], scale: [0.96, 1] }, { duration: 0.2 });
+      animate(frame, { opacity: [0, 1], scale: [0.965, 1] }, { duration: FADE_DURATION, ease: LIGHTBOX_EASE });
     }
     // run once on open
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -90,14 +93,14 @@ export function PhotoLightbox<T extends PhotoLightboxEntry>({
     if (closingRef.current) return;
     closingRef.current = true;
     const frame = frameRef.current;
-    if (backdropRef.current) animate(backdropRef.current, { opacity: 0 }, { duration: 0.2 });
-    if (panelRef.current) animate(panelRef.current, { opacity: 0, x: 12 }, { duration: 0.18 });
+    if (backdropRef.current) animate(backdropRef.current, { opacity: 0 }, { duration: FADE_DURATION, ease: LIGHTBOX_EASE });
+    if (panelRef.current) animate(panelRef.current, { opacity: 0, x: 18 }, { duration: 0.18, ease: LIGHTBOX_EASE });
     const target = morphRef.current && getAnchorRect ? getAnchorRect(currentIdRef.current!) : null;
     if (frame && target) {
       const t = flip(target, frame.getBoundingClientRect());
       animate(frame, { ...t, opacity: 0.5 }, FRAME_SPRING).then(onClose);
     } else if (frame) {
-      animate(frame, { opacity: 0, scale: 0.96 }, { duration: 0.18 }).then(onClose);
+      animate(frame, { opacity: 0, scale: 0.965 }, { duration: 0.18, ease: LIGHTBOX_EASE }).then(onClose);
     } else {
       onClose();
     }
@@ -147,7 +150,7 @@ export function PhotoLightbox<T extends PhotoLightboxEntry>({
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ duration: 0.26, ease: 'easeInOut' }}
+                transition={{ duration: 0.24, ease: LIGHTBOX_EASE }}
                 className="absolute inset-0"
               >
                 {renderImage ? (
@@ -169,7 +172,7 @@ export function PhotoLightbox<T extends PhotoLightboxEntry>({
         <div
           ref={panelRef}
           style={{ opacity: 0 }}
-          className="pointer-events-auto flex max-h-[46vh] w-full shrink-0 flex-col border-t border-line bg-surface md:max-h-none md:w-[360px] md:border-l md:border-t-0"
+          className="pointer-events-auto flex max-h-[46vh] w-full shrink-0 flex-col border-t border-line bg-surface md:max-h-none md:w-[400px] md:border-l md:border-t-0 xl:w-[420px]"
         >
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-5">
             <span className="label tabular-nums">

@@ -40,8 +40,7 @@ import {
   type GalleryAlbum,
   type GalleryAlbumStatus,
 } from '../../lib/galleryApi';
-import { FORMATS } from '../../lib/engine';
-import { GALLERY_FORMAT_IDS, resolveGalleryFormat } from '../../lib/galleryFormat';
+import { GALLERY_FORMAT_OPTIONS, formatOptionLabel, resolveGalleryFormat } from '../../lib/galleryFormat';
 import { suggestGalleryMetadata } from '../../lib/galleryMetadata';
 import {
   GALLERY_UPLOAD_MAX_BYTES,
@@ -94,8 +93,6 @@ const EMPTY_ALBUM: AlbumDraft = {
   coverPhotoId: '',
   photoIds: [],
 };
-
-const GALLERY_FORMAT_OPTIONS = FORMATS.filter((format) => GALLERY_FORMAT_IDS.has(format.id));
 
 type AlbumSubtitleField = 'updated' | 'created' | 'published' | 'photo-count' | 'status' | 'description';
 type AlbumDefaultMode = 'view' | 'edit';
@@ -1332,81 +1329,74 @@ function PhotoBulkTable({
   accessToken: string | null;
 }) {
   return (
-    <div className="overflow-x-auto border border-line">
-      <table className="w-full min-w-[78rem] text-left text-xs">
-        <thead className="border-b border-line bg-faint text-muted">
-          <tr>
-            <th className="px-2 py-2">Submit</th>
-            <th className="px-2 py-2">Image</th>
-            <th className="px-2 py-2">Title</th>
-            <th className="px-2 py-2">Camera</th>
-            <th className="px-2 py-2">Lens</th>
-            <th className="px-2 py-2">Format</th>
-            <th className="px-2 py-2">Focal length</th>
-            <th className="px-2 py-2">Aperture</th>
-            <th className="px-2 py-2">Framing</th>
-            <th className="px-2 py-2">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-line">
-          {photos.map((photo) => {
-            const draft = drafts[photo.id] ?? draftFromPhoto(photo);
-            return (
-              <tr key={photo.id}>
-                <td className="px-2 py-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedPhotoIds.has(photo.id)}
-                    onChange={(event) => setSelectedPhotoIds((current) => toggleSetValue(current, photo.id, event.target.checked))}
-                  />
-                </td>
-                <td className="px-2 py-2">
-                  <AccountPhotoImage photo={photo} accessToken={accessToken} className="h-16 w-20 object-cover grayscale" />
-                  <div className="mt-1 text-[10px] uppercase tracking-wide text-muted">{photo.status}</div>
-                </td>
-                <td className="px-2 py-2"><TableInput value={draft.title} onChange={(value) => updateDraft(photo.id, 'title', value, setDrafts)} /></td>
-                <td className="px-2 py-2"><TableInput value={draft.camera} onChange={(value) => updateDraft(photo.id, 'camera', value, setDrafts)} /></td>
-                <td className="px-2 py-2"><TableInput value={draft.lens} onChange={(value) => updateDraft(photo.id, 'lens', value, setDrafts)} /></td>
-                <td className="px-2 py-2">
-                  <select value={normalizedFormatId(draft.formatId)} onChange={(event) => updateDraft(photo.id, 'formatId', event.target.value, setDrafts)} className="w-32 border border-line bg-transparent px-1 py-1">
-                    {GALLERY_FORMAT_OPTIONS.map((format) => <option key={format.id} value={format.id}>{format.name}</option>)}
-                  </select>
-                </td>
-                <td className="px-2 py-2"><TableInput value={draft.focal} onChange={(value) => updateDraft(photo.id, 'focal', value, setDrafts)} className="w-20" /></td>
-                <td className="px-2 py-2"><TableInput value={draft.aperture} onChange={(value) => updateDraft(photo.id, 'aperture', value, setDrafts)} className="w-16" /></td>
-                <td className="px-2 py-2">
-                  <select value={draft.subjectPreset} onChange={(event) => updateDraft(photo.id, 'subjectPreset', event.target.value, setDrafts)} className="w-32 border border-line bg-transparent px-1 py-1">
-                    {SUBJECT_DISTANCE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
-                  </select>
-                </td>
-                <td className="px-2 py-2">
-                  <div className="flex gap-1">
-                    <Button onClick={() => void savePhoto(photo)} disabled={busy}>
-                      <Save size={13} strokeWidth={1.5} />
-                      Save
-                    </Button>
-                    <Button onClick={() => setAlbumDraft((current) => ({
-                      ...current,
-                      photoIds: current.photoIds.filter((id) => id !== photo.id),
-                      coverPhotoId: current.coverPhotoId === photo.id ? '' : current.coverPhotoId,
-                    }))}>
-                      <X size={13} strokeWidth={1.5} />
-                      Remove
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-          {photos.length === 0 && (
-            <tr>
-              <td colSpan={10} className="px-3 py-8 text-center text-muted">
-                Add photos to this album to edit their publishing details.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+    <div className="divide-y divide-line border border-line">
+      {photos.map((photo) => {
+        const draft = drafts[photo.id] ?? draftFromPhoto(photo);
+        return (
+          <div key={photo.id} className="grid gap-3 p-3 lg:grid-cols-[1.25rem_7rem_minmax(0,1fr)_auto] lg:items-start">
+            <input
+              type="checkbox"
+              checked={selectedPhotoIds.has(photo.id)}
+              onChange={(event) => setSelectedPhotoIds((current) => toggleSetValue(current, photo.id, event.target.checked))}
+              className="mt-1"
+              aria-label={`Select ${photo.title}`}
+            />
+
+            <div className="flex gap-3 lg:block">
+              <AccountPhotoImage photo={photo} accessToken={accessToken} className="h-20 w-24 shrink-0 object-cover grayscale lg:h-20 lg:w-full" />
+              <div className="min-w-0 lg:mt-2">
+                <div className="label">{photo.status}</div>
+                <div className="mt-1 truncate text-xs font-bold lg:hidden">{photo.title}</div>
+              </div>
+            </div>
+
+            <div className="grid min-w-0 gap-2 md:grid-cols-6">
+              <DenseField className="md:col-span-2" label="Title" value={draft.title} onChange={(value) => updateDraft(photo.id, 'title', value, setDrafts)} />
+              <DenseField className="md:col-span-2" label="Camera" value={draft.camera} onChange={(value) => updateDraft(photo.id, 'camera', value, setDrafts)} />
+              <DenseField className="md:col-span-2" label="Lens" value={draft.lens} onChange={(value) => updateDraft(photo.id, 'lens', value, setDrafts)} />
+              <DenseSelect
+                className="md:col-span-2"
+                label="Format"
+                value={normalizedFormatId(draft.formatId)}
+                onChange={(value) => updateDraft(photo.id, 'formatId', value, setDrafts)}
+                options={GALLERY_FORMAT_OPTIONS.map((format) => ({ value: format.id, label: formatOptionLabel(format) }))}
+              />
+              <DenseField label="Focal length" value={draft.focal} onChange={(value) => updateDraft(photo.id, 'focal', value, setDrafts)} />
+              <DenseField label="Aperture" value={draft.aperture} onChange={(value) => updateDraft(photo.id, 'aperture', value, setDrafts)} />
+              <DenseSelect
+                className="md:col-span-2"
+                label="Framing"
+                value={draft.subjectPreset}
+                onChange={(value) => updateDraft(photo.id, 'subjectPreset', value, setDrafts)}
+                options={SUBJECT_DISTANCE_PRESETS.map((preset) => ({ value: preset.id, label: preset.label }))}
+              />
+            </div>
+
+            <div className="flex gap-1 lg:flex-col">
+              <Button onClick={() => void savePhoto(photo)} disabled={busy} title="Save details">
+                <Save size={13} strokeWidth={1.5} />
+                <span className="lg:sr-only">Save</span>
+              </Button>
+              <Button
+                title="Remove from album"
+                onClick={() => setAlbumDraft((current) => ({
+                  ...current,
+                  photoIds: current.photoIds.filter((id) => id !== photo.id),
+                  coverPhotoId: current.coverPhotoId === photo.id ? '' : current.coverPhotoId,
+                }))}
+              >
+                <X size={13} strokeWidth={1.5} />
+                <span className="lg:sr-only">Remove</span>
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+      {photos.length === 0 && (
+        <div className="px-3 py-8 text-center text-xs text-muted">
+          Add photos to this album to edit their publishing details.
+        </div>
+      )}
     </div>
   );
 }
@@ -1431,23 +1421,8 @@ function AccountLightboxInfo({
     <div className="space-y-5">
       <div>
         <div className="text-sm font-bold">{photo.title}</div>
-        <div className="label mt-1">{photo.camera} · {photo.lens}</div>
+        <div className="label mt-1">{photo.status}</div>
       </div>
-
-      <dl className="divide-y divide-line border border-line text-xs">
-        {[
-          ['Status', photo.status],
-          ['Format', formatName(photo.formatId)],
-          ['Focal length', `${photo.focal}mm`],
-          ['Aperture', `f/${photo.aperture}`],
-          ['Framing', photo.subjectPreset ?? 'Unset'],
-        ].map(([label, value]) => (
-          <div key={label} className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-3 px-3 py-2">
-            <dt className="text-muted">{label}</dt>
-            <dd className="break-words">{value}</dd>
-          </div>
-        ))}
-      </dl>
 
       <PhotoOpticsPanel
         entry={entry}
@@ -1526,8 +1501,58 @@ function SelectField({ label, value, options, onChange }: { label: string; value
   );
 }
 
-function TableInput({ value, onChange, className = 'w-36' }: { value: string; onChange: (value: string) => void; className?: string }) {
-  return <input value={value} onChange={(event) => onChange(event.target.value)} className={`${className} border border-line bg-transparent px-1 py-1 outline-none focus:border-line-strong`} />;
+function DenseField({
+  label,
+  value,
+  onChange,
+  className = '',
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <label className={`min-w-0 ${className}`} title={label}>
+      <span className="label mb-1 block">{label}</span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-8 w-full min-w-0 border border-line bg-transparent px-2 text-xs outline-none focus:border-line-strong"
+      />
+    </label>
+  );
+}
+
+function DenseSelect({
+  label,
+  value,
+  options,
+  onChange,
+  className = '',
+}: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <label className={`min-w-0 ${className}`} title={label}>
+      <span className="label mb-1 block">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-8 w-full min-w-0 border border-line bg-transparent px-2 text-xs outline-none focus:border-line-strong"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
@@ -1629,10 +1654,6 @@ function numberOrFallback(value: string, fallback: number): number {
 
 function normalizedFormatId(value: string): string {
   return resolveGalleryFormat(value).format.id;
-}
-
-function formatName(formatId: string): string {
-  return resolveGalleryFormat(formatId).format.name;
 }
 
 function readAlbumPreferences(): AlbumDisplayPreferences {
