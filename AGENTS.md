@@ -3,6 +3,7 @@
 ## Deployment
 
 - Use `blur` as the visible product/site name in app chrome and browser titles; do not reintroduce `howmuchblur` as user-facing branding.
+- Keep the root README product-led and visually consistent with the app's restrained hard-edged style. It should introduce blur, its back story, and practical use cases before operational details; keep self-hosting/setup content minimal and collapsed near the bottom.
 - Keep the desktop main navigation sidebar collapsible. New sidebar destinations must work in both expanded and icon-only states, with hard-edged hover/focus tooltips for collapsed labels. Keep the collapse/expand control in the sidebar's top brand chrome, not as a navigation item or footer control.
 - Treat equivalence readouts as selected-target-format equivalents. When a user can choose a target format, label the result as `[selected format] Equivalent` and compute against that target instead of hard-coding full-frame language.
 - Keep the React/Vite app deployable as a static Cloudflare Pages site from the repository root with build command `cd app && npm ci && npm run build` and output directory `app/dist`; the root `package.json` build script must continue to delegate to that same command so Pages projects configured as `bun run build` still work. Do not add Cloudflare Workers or Pages Functions for graph/blur generation unless a server-only requirement is introduced.

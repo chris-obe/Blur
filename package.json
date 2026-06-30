@@ -1,6 +1,7 @@
 {
   "name": "compareblur",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
   "scripts": {
     "setup": "cd app && bun install",

@@ -1,112 +1,194 @@
-# CompareBlur
+<div align="center">
 
-A ground-up revamp of the classic [howmuchblur](https://github.com/maakbaas/how-much-blur)
-background-blur calculator — rebuilt around a portable optics **engine** and a modern,
-task-oriented frontend that translates the *look* of one camera/lens/format onto another.
+# blur
 
-Instead of only "viewing a graph", the goal is to answer real photographer questions:
-*"I shot this on an XPan at 90mm ƒ/4 — what do I need on full frame to match it?"* and
-*"does anything in my kit already get me there, or should I buy a lens?"*
+### A gallery, kit planner, and optics translator for photographers who want to understand the look of a frame.
 
-## Repository layout
+[Open the app](https://compareblur.pages.dev) · [Compare systems](#compare-the-look) · [Use the gallery](#gallery-as-reference) · [Self-host](#self-hosting)
 
-| Path        | What it is |
-|-------------|------------|
-| `app/`      | Vite + React + TypeScript frontend. Compare, Gallery, My Kit, Suggestions, and Admin surfaces. |
-| `engine/`   | Framework-agnostic optics engine. Handles field of view, blur matching, crops, formats, and equivalent-system math. |
-| `catalog/`  | Source adapters and deterministic transforms for the generated camera/lens catalog. |
-| `workers/`  | Cloudflare Worker for scheduled catalog refresh and R2 export publishing. |
-| `functions/` | Cloudflare Pages Functions for admin, gallery, image, and catalog proxy APIs. |
-| `migrations/` | D1 migrations for app-owned data such as gallery metadata. |
-| `scripts/`  | Operational scripts, including gallery seed migration into Cloudflare. |
-| `docs/`     | Design and catalog orchestration notes. |
+</div>
 
-## The engine
+---
 
-The core insight, generalised from the original calculator: two systems produce the same
-field of view **and** background blur when their **equivalent focal length** (`focal × ratio`)
-and **equivalent aperture** (`aperture × ratio`) match — where `ratio` is the sensor
-dimension ratio along the matched axis. Picking the *horizontal* axis is what makes
-panoramic formats (XPan, 6×17) work, where a diagonal crop factor would mislead.
+## The Short Version
 
-Key exports (`engine/index.js`): `matchSystem`, `blurFraction`, `blurCurve`,
-`cropToAspect`, `fieldOfView`, `focusDistanceForFraming`, `nearestFStop`, `FORMATS`.
+blur answers a deceptively practical question:
 
-## Running the app
+> "If this photograph was made on that camera and lens, what would I need on my own system to get the same field of view and depth-of-field feel?"
 
-From the repository root (recommended with [Bun](https://bun.sh)):
+It is part calculator, part reference gallery, part kit notebook. Upload or open a photograph, inspect the real shot metadata, switch target formats, and see what focal length and aperture would create the closest equivalent look elsewhere.
+
+| What you can do | What blur gives back |
+| --- | --- |
+| Compare a 4x5, XPan, medium-format, full-frame, APS-C, Micro Four Thirds, compact, or phone shot | Equivalent focal length, equivalent aperture, field of view, crop factor, and blur behaviour |
+| Save your own cameras and lenses | A practical verdict on whether your kit can already make the look |
+| Browse a moderated photo gallery | Real examples with camera, lens, format, aperture, shutter, ISO, and framing context |
+| Upload and organise your own photos | Private albums, EXIF extraction, compressed Cloudflare storage, and optional promotion into the public gallery |
+| Embed photographs in a blog | Rich photo frames that carry the image, metadata, target-format selector, and a path back into blur |
+
+---
+
+## Why It Exists
+
+The original howmuchblur calculator was a small, useful thing: a visual way to compare background blur between formats. blur keeps that spirit, but turns it into a working photographic tool.
+
+The problem is no longer just "what is the crop factor?"
+
+The more useful questions are:
+
+- "I like this 6x7 portrait. What lens would make this feel similar on full frame?"
+- "Does my kit already cover this look, or am I inventing an excuse to buy a lens?"
+- "If this frame was made with a 35mm f/1.4 on a D810, what does that become on GFX, Micro Four Thirds, or 4x5?"
+- "Can my gallery images carry the actual optical context instead of becoming anonymous JPEGs in a blog post?"
+
+blur is built around those questions. It treats photographs as references, not just files.
+
+---
+
+## Compare The Look
+
+The comparison engine works from the photographic properties that actually shape the image:
+
+| Signal | Why it matters |
+| --- | --- |
+| Format size and aspect | Field of view changes by axis, which matters for panoramic formats like XPan and 6x17 |
+| Focal length | Controls angle of view and perspective framing for a given subject distance |
+| Aperture | Controls the effective blur relationship when translated across formats |
+| Framing preset | Face, half-body, full-body, group, and landscape presets give blur calculations a more realistic subject scale |
+| Kit inventory | The app can tell you whether your saved bodies and lenses cover the look already |
+
+The core idea is simple: two systems feel similar when their field of view and background blur line up. blur handles the awkward bits around sensor dimensions, aspect ratios, focal distance assumptions, and real kit coverage.
+
+---
+
+## Gallery As Reference
+
+The gallery is not just decoration. It is the evidence layer.
+
+Each approved image can carry curated metadata:
+
+| Metadata | Used for |
+| --- | --- |
+| Camera, lens, and format | Understanding the source system |
+| Focal length and aperture | Calculating equivalence |
+| Shutter, ISO, and capture date | Reading the photograph as a real exposure |
+| Framing distance preset | Making compare defaults smarter |
+| Tags and albums | Turning uploads into useful sets of references |
+
+Admin uploads and user uploads are processed before storage, so new images do not require a rebuild. Metadata lives in Cloudflare D1. Image objects live in Cloudflare R2. Approved gallery photos become public references; account-owned albums stay private unless intentionally published.
+
+---
+
+## For Your Own Work
+
+blur is being built as a personal photo-hosting and reference system as much as a calculator.
+
+You can use it to:
+
+- keep a private visual notebook of lens tests and references;
+- build albums around projects, trips, cameras, or looks;
+- compare possible purchases against the photos you actually want to make;
+- publish selected images into a public gallery after the required details are complete;
+- embed rich interactive frames in blog posts, with the image and optical context travelling together.
+
+The best version of this is not a sterile benchmark. It is a living gallery of photographs that can explain themselves.
+
+---
+
+## Product Shape
+
+| Surface | Purpose |
+| --- | --- |
+| `Gallery` | Public approved reference images with shared lightbox and optics panel |
+| `Compare` | Build one or more systems and compare field of view, blur, and equivalent settings |
+| `My Kit` | Save bodies and lenses so suggestions are grounded in what you own |
+| `Suggestions` | See what lenses or systems would cover a desired look |
+| `Albums` | Private account-owned galleries, bulk upload, edit, and publish workflows |
+| `Settings` | Theme, account, album display preferences, and blog embed controls |
+| `Admin` | Catalog refresh, gallery moderation, storage checks, uploads, tags, albums, and embed settings |
+
+The interface is deliberately restrained: monochrome, hard-edged, dense where it needs to be, and focused on the photograph rather than decorative UI.
+
+---
+
+## Back Story
+
+blur began as a ground-up revamp of the classic [howmuchblur](https://github.com/maakbaas/how-much-blur) background-blur calculator.
+
+The original calculator made one idea approachable: different camera formats can be compared by the blur they produce, not only by the crop factor printed in a spec sheet. This project keeps that idea and adds the missing workflow around it: real images, real EXIF, real camera and lens catalogues, saved kits, Cloudflare-backed uploads, albums, moderation, and embeddable photo frames.
+
+The result is no longer only a graph. It is a small photographic operating system for asking: "what made this look, and what would I need to make it?"
+
+---
+
+<a id="self-hosting"></a>
+<details>
+<summary><strong>Self Hosting</strong></summary>
+
+### Requirements
+
+- Bun or npm for local development.
+- A Cloudflare Pages project for static hosting.
+- Optional Cloudflare D1/R2/Workers resources for gallery, catalog refresh, albums, admin, and uploads.
+- Optional Auth0 configuration for accounts and admin roles.
+
+### Local Development
 
 ```bash
-bun run setup    # install app dependencies
-bun run dev      # http://localhost:5174 (pinned; strictPort)
-bun run build    # type-check + production bundle (npm ci for Cloudflare Pages)
+bun run setup
+bun run dev
 ```
 
-Or from `app/` directly:
+The app runs at the Vite dev URL configured in `app/`.
+
+### Production Build
 
 ```bash
-cd app
-bun install
-bun run dev      # http://localhost:5174
-bun run build    # type-check + production bundle
+bun run build
 ```
 
-The app imports the engine from the sibling `engine/` directory via a Vite alias
-(`@engine`), so the engine stays shared rather than copied.
+Cloudflare Pages should use:
 
-## Catalog data
+| Setting | Value |
+| --- | --- |
+| Root directory | repository root |
+| Build command | `cd app && npm ci && npm run build` |
+| Build output directory | `app/dist` |
 
-The app uses one generated catalog surface rather than parallel hand-maintained
-camera/lens datasets. The catalog pipeline fetches LensDB and CameraDatabase,
-layers curated overrides, validates the result, and writes:
-
-- `app/public/catalog.fallback.json` for static fallback builds.
-- `exports/catalog.latest.json` in R2 via the `compareblur-catalog-sync` Worker.
-
-Useful commands:
+### Useful Commands
 
 ```bash
 bun run catalog:build
 bun run catalog:check
 bun run catalog:worker:deploy
+bun run gallery:migrate-seed
 ```
 
-The generated catalog currently includes camera bodies, fixed-lens compact
-cameras, interchangeable lenses, curated GF/legacy lenses, aperture points, and
-fixed compact camera/lens bindings.
+### Repository Map
 
-## Cloudflare Pages
+| Path | Role |
+| --- | --- |
+| `app/` | Vite, React, TypeScript frontend |
+| `engine/` | Framework-agnostic optics engine |
+| `catalog/` | Source adapters, transforms, validation, curated overrides |
+| `functions/` | Cloudflare Pages Functions |
+| `workers/` | Catalog refresh Worker |
+| `migrations/` | D1 schema migrations |
+| `docs/` | Design and catalog architecture notes |
 
-This project deploys the React/Vite app as a static Cloudflare Pages site. The
-blur graph/math path is still fully client-side through `engine/`; mutable data
-uses Cloudflare serverless services.
+</details>
 
-Use these Pages build settings from the connected GitHub repository:
+<details>
+<summary><strong>Licensing And Attribution</strong></summary>
 
-| Setting | Value |
-|---------|-------|
-| Root directory | repository root |
-| Build command | `cd app && npm ci && npm run build` |
-| Build output directory | `app/dist` |
+Project code authored for the blur revamp is licensed under the MIT License. See [LICENSE.md](LICENSE.md).
 
-The root `wrangler.toml` records `app/dist` as the Pages output directory, and
-`app/public/_redirects` preserves client-side routing on Cloudflare Pages.
-The root `package.json` also supports Pages projects currently configured with
-`bun run build`; that command delegates to the same app build above.
+Important boundaries:
 
-Cloudflare-backed data paths:
+- The original howmuchblur concept and repository history are credited to [maakbaas](https://github.com/maakbaas/how-much-blur).
+- Lens data from [LensDB](https://github.com/Luminoid/lens-db) is licensed under CC BY-NC-SA 4.0 and remains under that license in generated catalog exports.
+- CameraDatabase-derived records are MIT-licensed by their source.
+- Lensfun-derived references remain subject to Lensfun/LGPL database terms.
+- Gallery photographs, uploaded images, and personal content remain owned by their respective creators unless a separate license is stated.
 
-- Catalog refresh/export: Worker + D1 + R2.
-- Gallery metadata/moderation: Pages Functions + D1.
-- Gallery image objects: R2.
-- Admin operations: same-origin Pages Functions that inject server-side secrets
-  and/or verify Auth0/Cloudflare Access identity.
-
-## Credits
-
-Original concept and calculator by [maakbaas](https://github.com/maakbaas/how-much-blur);
-online version hosted by Gijs de Koning.
-
-Lens catalog data from [LensDB](https://github.com/Luminoid/lens-db) (lens.luminoid.dev),
-used under CC BY-NC-SA 4.0 — this project is non-commercial and shares the derived dataset
-under the same license. See `app/src/data/LENSDB.md`.
+</details>
