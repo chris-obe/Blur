@@ -675,13 +675,13 @@ function AlbumBuilder({
         onChange={(event) => void uploadFiles(event.target.files)}
       />
 
-      <div className="grid gap-4 xl:grid-cols-[14rem_minmax(0,1fr)_18rem]">
-        <aside className="space-y-3">
+      <div className="grid gap-4 xl:h-[calc(100vh-9rem)] xl:min-h-[34rem] xl:grid-cols-[14rem_minmax(0,1fr)_18rem] xl:items-start xl:overflow-hidden">
+        <aside className="space-y-3 xl:flex xl:h-full xl:flex-col xl:overflow-hidden">
           <Button variant="solid" className="w-full" onClick={startNewAlbum}>
             <Plus size={14} strokeWidth={1.5} />
             New album
           </Button>
-          <div className="divide-y divide-line border border-line">
+          <div className="divide-y divide-line border border-line xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:[scrollbar-gutter:stable]">
             {albums.map((album) => (
               <button
                 key={album.slug}
@@ -706,7 +706,7 @@ function AlbumBuilder({
           </div>
         </aside>
 
-        <main className="min-w-0 space-y-5">
+        <main className="min-w-0 space-y-5 xl:h-full xl:overflow-y-auto xl:pr-2 xl:[scrollbar-gutter:stable]">
           <section className="space-y-4">
             <input
               value={albumDraft.title}
@@ -790,7 +790,7 @@ function AlbumBuilder({
           </section>
         </main>
 
-        <aside className="space-y-4">
+        <aside className="space-y-4 xl:h-full xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]">
           <section className="border border-line p-3">
             <div className="label mb-3">Album options</div>
             <SelectField
