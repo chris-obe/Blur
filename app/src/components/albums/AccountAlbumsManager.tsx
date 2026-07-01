@@ -1089,6 +1089,7 @@ function AlbumViewer({
   const updateVisibility = async (status: GalleryAlbumStatus) => {
     if (!selectedAlbum || busy) return;
     await patchAlbum(selectedAlbum.slug, { status });
+    await reload();
   };
 
   if (albums.length === 0 && photos.length === 0) {

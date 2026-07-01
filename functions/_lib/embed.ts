@@ -346,6 +346,41 @@ export async function albumContainsApprovedPhoto(env: GalleryEnv, slug: string, 
   return !!row;
 }
 
+export async function publishAlbumPhotos(
+  env: GalleryEnv,
+  slug: string,
+  options: { ownerSub?: string } = {},
+) {
+  const now = new Date().toISOString();
+  const query = options.ownerSub
+    ? `UPDATE gallery_photos
+       SET status = 'approved',
+           updated_at = ?,
+           published_at = COALESCE(published_at, ?)
+       WHERE submitted_by = ?
+         AND id IN (
+           SELECT photo_id
+           FROM gallery_album_photos
+           WHERE album_slug = ?
+         )`
+    : `UPDATE gallery_photos
+       SET status = 'approved',
+           updated_at = ?,
+           published_at = COALESCE(published_at, ?)
+       WHERE id IN (
+         SELECT photo_id
+         FROM gallery_album_photos
+         WHERE album_slug = ?
+       )`;
+
+  const statement = env.GALLERY_DB.prepare(query);
+  if (options.ownerSub) {
+    await statement.bind(now, now, options.ownerSub, slug).run();
+    return;
+  }
+  await statement.bind(now, now, slug).run();
+}
+
 export async function replaceAlbumPhotos(
   env: GalleryEnv,
   slug: string,
