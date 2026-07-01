@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { useCompare } from '../../store/CompareProvider';
 import { BlurChart } from './BlurChart';
 import { SubjectControl } from './SubjectControl';
 import { AddSystem } from './AddSystem';
 import { SystemList } from './SystemList';
+import { CompareGalleryExamples, CompareGalleryExamplesToggle } from './CompareGalleryExamples';
 
 export function ComparePage() {
   const { systems, subjectWidthM, setSubjectWidthM, focusOverrideM, setFocusOverrideM } = useCompare();
+  const [examplesOpen, setExamplesOpen] = useState(false);
 
   return (
     <div className="flex min-h-full flex-col lg:h-full lg:flex-row">
@@ -19,10 +22,13 @@ export function ComparePage() {
 
       {/* Main: framing controls + the chart filling the rest */}
       <div className="order-1 flex min-w-0 flex-1 flex-col gap-4 p-4 lg:order-2 lg:p-6">
-        <p className="max-w-prose text-sm text-muted">
-          Pick how much of the frame the subject occupies. The chart calculates where each system must stand to frame that subject,
-          then plots how blurry the background becomes as it falls farther behind the subject.
-        </p>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <p className="max-w-prose text-sm text-muted">
+            Pick how much of the frame the subject occupies. The chart calculates where each system must stand to frame that subject,
+            then plots how blurry the background becomes as it falls farther behind the subject.
+          </p>
+          <CompareGalleryExamplesToggle open={examplesOpen} onToggle={() => setExamplesOpen((current) => !current)} />
+        </div>
 
         <SubjectControl
           width={subjectWidthM}
@@ -35,6 +41,18 @@ export function ComparePage() {
           <BlurChart systems={systems} subjectWidthM={subjectWidthM} focusOverrideM={focusOverrideM} />
         </div>
       </div>
+
+      {examplesOpen && (
+        <aside className="order-3 min-h-0 shrink-0 border-line lg:w-[24rem] lg:border-l">
+          <CompareGalleryExamples
+            systems={systems}
+            subjectWidthM={subjectWidthM}
+            focusOverrideM={focusOverrideM}
+            onSubjectWidth={setSubjectWidthM}
+            onClose={() => setExamplesOpen(false)}
+          />
+        </aside>
+      )}
     </div>
   );
 }

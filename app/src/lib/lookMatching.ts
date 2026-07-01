@@ -81,6 +81,17 @@ export interface LookMatchResult {
   samePosition: LookMatchAxis;
 }
 
+export interface LookSimilarityScore {
+  score: number;
+  verdict: LookMatchVerdict;
+  fovDeltaPct: number;
+  blurDeltaStops: number;
+  blurDeltaPctPoints: number;
+  referenceBlurPct: number;
+  candidateBlurPct: number;
+  focusDistanceM: number;
+}
+
 export interface LookMapPoint {
   id: string;
   label: string;
@@ -170,6 +181,28 @@ export function rankLookCandidates(reference: ReferenceLook, candidates: LookCan
     .map((candidate) => matchLook(reference, candidate))
     .sort((a, b) => b.score - a.score || a.candidate.label.localeCompare(b.candidate.label))
     .slice(0, limit);
+}
+
+export function scoreLookSimilarity(reference: ReferenceLook, candidate: ReferenceLook): LookSimilarityScore {
+  const referenceMetrics = lookMetrics(reference);
+  const candidateMetrics = lookMetrics(candidate);
+  const fovDeltaPct = Math.abs(candidateMetrics.fovDeg - referenceMetrics.fovDeg) / Math.max(1, referenceMetrics.fovDeg);
+  const blurDeltaStops = Math.abs(stopsBetween(referenceMetrics.blurPct, candidateMetrics.blurPct));
+  const blurDeltaPctPoints = candidateMetrics.blurPct - referenceMetrics.blurPct;
+  const fovPenalty = Math.min(65, fovDeltaPct * 130);
+  const blurPenalty = Math.min(45, blurDeltaStops * 32);
+  const score = clampScore(SCORE_MAX - fovPenalty - blurPenalty);
+
+  return {
+    score,
+    verdict: verdictForScore(score),
+    fovDeltaPct: round(fovDeltaPct * 100, 1),
+    blurDeltaStops: round(blurDeltaStops, 1),
+    blurDeltaPctPoints: round(blurDeltaPctPoints, 1),
+    referenceBlurPct: round(referenceMetrics.blurPct, 1),
+    candidateBlurPct: round(candidateMetrics.blurPct, 1),
+    focusDistanceM: round(candidateMetrics.focusDistanceM, 1),
+  };
 }
 
 export function referenceMapPoint(reference: ReferenceLook, label = 'Reference'): LookMapPoint {

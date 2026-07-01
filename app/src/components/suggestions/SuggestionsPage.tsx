@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, Lightbulb, RefreshCw } from 'lucide-react';
-import { GALLERY_SEED } from '../../data/gallery.seed';
 import { getFormat } from '../../lib/engine';
-import { listGalleryPhotos } from '../../lib/galleryApi';
 import { catalogLookCandidatesForCamera, compareSystemToReference, kitLookCandidates } from '../../lib/lookCandidates';
 import {
   matchMapPoint,
@@ -13,6 +11,7 @@ import {
 } from '../../lib/lookMatching';
 import { buildTasteProfile, nextTasteQuizItems } from '../../lib/tasteProfile';
 import type { GalleryItem } from '../../lib/types';
+import { usePublicGalleryPhotos } from '../../hooks/usePublicGalleryPhotos';
 import { useCatalog } from '../../store/CatalogProvider';
 import { useCompare, nextSystemId } from '../../store/CompareProvider';
 import { useKit } from '../../store/KitProvider';
@@ -41,38 +40,12 @@ export function SuggestionsPage() {
   const catalog = useCatalog();
   const kit = useKit();
   const compare = useCompare();
-  const { reactions, registerCounts } = useReactions();
+  const { reactions } = useReactions();
+  const { photos, loading, error } = usePublicGalleryPhotos();
   const [mode, setMode] = useState<SuggestionMode>('taste');
-  const [photos, setPhotos] = useState<GalleryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedCompareId, setSelectedCompareId] = useState('');
   const [selectedCameraId, setSelectedCameraId] = useState('');
   const [manualReference, setManualReference] = useState<ReferenceLook>(DEFAULT_REFERENCE);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    listGalleryPhotos()
-      .then((next) => {
-        if (cancelled) return;
-        const loaded = next.length ? next : GALLERY_SEED;
-        setPhotos(loaded);
-        registerCounts(loaded);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setPhotos(GALLERY_SEED);
-        setError(err instanceof Error ? err.message : 'Gallery photos could not be loaded.');
-        registerCounts(GALLERY_SEED);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [registerCounts]);
 
   const taste = useMemo(() => buildTasteProfile(photos, reactions), [photos, reactions]);
   const compareReferences = useMemo(

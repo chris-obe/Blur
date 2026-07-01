@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { categoryForFormat, type CategoryId } from '../../lib/categories';
-import { GALLERY_SEED } from '../../data/gallery.seed';
 import type { GalleryItem, ViewEntry } from '../../lib/types';
-import { ApiError, getGalleryAlbum, listGalleryPhotos, type GalleryAlbum } from '../../lib/galleryApi';
+import { ApiError, getGalleryAlbum, type GalleryAlbum } from '../../lib/galleryApi';
 import { resolveGalleryFormat } from '../../lib/galleryFormat';
 import { suggestGalleryMetadata } from '../../lib/galleryMetadata';
+import { usePublicGalleryPhotos } from '../../hooks/usePublicGalleryPhotos';
 import { useCatalog } from '../../store/CatalogProvider';
 import { useReactions } from '../../store/ReactionsProvider';
 import { Button } from '../ui/Button';
@@ -53,11 +53,12 @@ export function GalleryPage({ albumSlug, initialPhotoId, closePath }: GalleryPag
   const navigate = useNavigate();
   const { cameras, lenses } = useCatalog();
   const { registerCounts } = useReactions();
+  const publicGallery = usePublicGalleryPhotos({ enabled: !albumSlug });
   const [formats, setFormats] = useState<Set<CategoryId>>(new Set());
   const [tags, setTags] = useState<string[]>([]);
   const [view, setView] = useState<View | null>(null);
   const [busy, setBusy] = useState(false);
-  const [items, setItems] = useState<GalleryItem[]>(GALLERY_SEED);
+  const [items, setItems] = useState<GalleryItem[]>([]);
   const [album, setAlbum] = useState<GalleryAlbum | null>(null);
   const [albumPassword, setAlbumPassword] = useState('');
   const [albumPasswordAttempt, setAlbumPasswordAttempt] = useState<{ value: string; nonce: number } | null>(null);
@@ -80,62 +81,52 @@ export function GalleryPage({ albumSlug, initialPhotoId, closePath }: GalleryPag
 
   useEffect(() => {
     let cancelled = false;
-    if (albumSlug) {
+    if (!albumSlug) {
       setAlbum(null);
-      setItems([]);
+      return;
     }
-    const load = albumSlug
-      ? getGalleryAlbum(albumSlug, { password: albumPasswordAttempt?.value ?? undefined }).then((data) => {
-          setAlbumPasswordRequired(false);
-          setAlbumPasswordMessage('');
-          setAlbum(data.album);
-          return data.photos;
-        })
-      : listGalleryPhotos().then((photos) => {
-          setAlbum(null);
-          return photos;
-        });
+    setAlbum(null);
+    setItems([]);
+    const load = getGalleryAlbum(albumSlug, { password: albumPasswordAttempt?.value ?? undefined }).then((data) => {
+      setAlbumPasswordRequired(false);
+      setAlbumPasswordMessage('');
+      setAlbum(data.album);
+      return data.photos;
+    });
 
     load
       .then((photos) => {
         if (cancelled) return;
-        if (albumSlug) {
-          setItems(photos);
-          registerCounts(photos);
-        } else if (photos.length > 0) {
-          setItems(photos);
-          registerCounts(photos);
-        } else {
-          setItems(GALLERY_SEED);
-          registerCounts(GALLERY_SEED);
-        }
+        setItems(photos);
+        registerCounts(photos);
       })
       .catch((error) => {
         if (cancelled) return;
-        if (albumSlug && error instanceof ApiError) {
-        const body = typeof error.body === 'object' && error.body != null ? error.body as { requiresPassword?: unknown } : null;
-        if (body?.requiresPassword) {
-          setAlbumPasswordRequired(true);
-          setAlbumPasswordMessage(albumPasswordAttempt?.value ? error.message : 'Album password required');
+        if (error instanceof ApiError) {
+          const body = typeof error.body === 'object' && error.body != null ? error.body as { requiresPassword?: unknown } : null;
+          if (body?.requiresPassword) {
+            setAlbumPasswordRequired(true);
+            setAlbumPasswordMessage(albumPasswordAttempt?.value ? error.message : 'Album password required');
             setAlbum(null);
             setItems([]);
             registerCounts([]);
             return;
           }
         }
-        if (albumSlug) {
-          setAlbum(null);
-          setItems([]);
-          registerCounts([]);
-        } else {
-          setItems(GALLERY_SEED);
-          registerCounts(GALLERY_SEED);
-        }
+        setAlbum(null);
+        setItems([]);
+        registerCounts([]);
       });
     return () => {
       cancelled = true;
     };
   }, [albumPasswordAttempt, albumSlug, registerCounts]);
+
+  useEffect(() => {
+    if (albumSlug) return;
+    setAlbum(null);
+    setItems(publicGallery.photos);
+  }, [albumSlug, publicGallery.photos]);
 
   useEffect(() => {
     setAlbumPassword('');
