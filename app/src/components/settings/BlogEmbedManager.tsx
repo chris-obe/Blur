@@ -6,8 +6,10 @@ import {
   Copy,
   ExternalLink,
   GripVertical,
-  RefreshCw,
+  Grid2X2,
   Save,
+  Square,
+  TriangleAlert,
 } from 'lucide-react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { adminTokenParams } from '../../auth/config';
@@ -135,9 +137,10 @@ export function BlogEmbedManager() {
     }
   };
 
-  const saveMode = async (targetMode: 'image' | 'gallery') => {
-    setMode(targetMode);
-    await saveTemplate();
+  const resetTemplate = () => {
+    setTemplate(cloneDefaultTemplate());
+    setMode('image');
+    setError(null);
   };
 
   const copyIframe = async () => {
@@ -235,16 +238,10 @@ export function BlogEmbedManager() {
           <div className="label mb-2">Blog embeds</div>
           <h3 className="text-xl font-bold tracking-tight">Embed template</h3>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={load} disabled={loading || saving}>
-            <RefreshCw size={14} strokeWidth={1.5} />
-            Reload
-          </Button>
-          <Button variant="solid" onClick={saveTemplate} disabled={saving}>
-            <Save size={14} strokeWidth={1.5} />
-            Save all
-          </Button>
-        </div>
+        <Button onClick={resetTemplate} disabled={loading || saving} title="Reset embed settings to defaults">
+          <TriangleAlert size={14} strokeWidth={1.5} />
+          Reset defaults
+        </Button>
       </div>
 
       {error && <div className="border border-line bg-faint p-3 text-xs">{error}</div>}
@@ -292,19 +289,23 @@ export function BlogEmbedManager() {
           <Panel title="Customization">
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-2">
-                <ModeButton active={mode === 'image'} label="Image" onClick={() => setMode('image')} />
-                <ModeButton active={mode === 'gallery'} label="Multi image" onClick={() => setMode('gallery')} />
+                <ModeButton
+                  active={mode === 'image'}
+                  icon={<Square size={15} strokeWidth={1.6} />}
+                  label="Image"
+                  onClick={() => setMode('image')}
+                />
+                <ModeButton
+                  active={mode === 'gallery'}
+                  icon={<Grid2X2 size={15} strokeWidth={1.6} />}
+                  label="Multi image"
+                  onClick={() => setMode('gallery')}
+                />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button onClick={() => saveMode('image')} disabled={saving}>
-                  <Save size={14} strokeWidth={1.5} />
-                  Save image
-                </Button>
-                <Button onClick={() => saveMode('gallery')} disabled={saving}>
-                  <Save size={14} strokeWidth={1.5} />
-                  Save multi
-                </Button>
-              </div>
+              <Button variant="solid" onClick={saveTemplate} disabled={saving} className="h-11 w-full">
+                <Save size={15} strokeWidth={1.5} />
+                {saving ? 'Saving' : 'Save embed settings'}
+              </Button>
 
               <label className="block">
                 <span className="label mb-2 block">Preview photo</span>
@@ -626,16 +627,27 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function ModeButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+function ModeButton({
+  active,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={[
-        'border px-3 py-2 text-xs uppercase tracking-wide transition-colors',
+        'inline-flex items-center justify-center gap-2 border px-3 py-2 text-xs uppercase tracking-wide transition-colors',
         active ? 'border-fg bg-fg text-bg' : 'border-line text-muted hover:border-line-strong hover:text-fg',
       ].join(' ')}
     >
+      {icon}
       {label}
     </button>
   );
@@ -803,6 +815,10 @@ function clampInteger(value: number | string, min: number, max: number, fallback
   const number = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, Math.round(number)));
+}
+
+function cloneDefaultTemplate(): EmbedTemplate {
+  return JSON.parse(JSON.stringify(DEFAULT_EMBED_TEMPLATE)) as EmbedTemplate;
 }
 
 function ToggleRow({ label, active, onToggle }: { label: string; active: boolean; onToggle: () => void }) {
