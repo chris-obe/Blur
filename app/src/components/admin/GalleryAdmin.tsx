@@ -237,10 +237,22 @@ export function GalleryAdmin({ accessToken, photos, loading, loaded, error, tags
   const updateStatus = async (photo: AdminGalleryPhoto, next: GalleryModerationStatus) => {
     setBusyId(photo.id);
     try {
-      await updateAdminGalleryPhoto(photo.id, { galleryStatus: next }, accessToken);
+      await updateAdminGalleryPhoto(photo.id, { galleryStatus: next, galleryStatusReviewed: true }, accessToken);
       await onReload();
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Gallery update failed');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const markReviewed = async (photo: AdminGalleryPhoto) => {
+    setBusyId(photo.id);
+    try {
+      await updateAdminGalleryPhoto(photo.id, { galleryStatus: photo.galleryStatus, galleryStatusReviewed: true }, accessToken);
+      await onReload();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Gallery review update failed');
     } finally {
       setBusyId(null);
     }
@@ -633,6 +645,12 @@ export function GalleryAdmin({ accessToken, photos, loading, loaded, error, tags
                       <Button disabled={busyId === photo.id} onClick={() => updateStatus(photo, 'approved')}>
                         <Check size={13} strokeWidth={1.5} />
                         Approve
+                      </Button>
+                    )}
+                    {photo.galleryStatusNeedsReview && (
+                      <Button disabled={busyId === photo.id} onClick={() => markReviewed(photo)}>
+                        <Check size={13} strokeWidth={1.5} />
+                        Reviewed
                       </Button>
                     )}
                     <Button disabled={busyId === photo.id} onClick={() => beginEdit(photo)}>

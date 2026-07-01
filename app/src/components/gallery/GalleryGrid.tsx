@@ -5,10 +5,11 @@ interface Props {
   items: GalleryItem[];
   onSelect: (item: GalleryItem) => void;
   activeId?: string | null;
+  enableReactions?: boolean;
   registerAnchor: (id: string, el: HTMLElement | null) => void;
 }
 
-export function GalleryGrid({ items, onSelect, activeId, registerAnchor }: Props) {
+export function GalleryGrid({ items, onSelect, activeId, enableReactions = true, registerAnchor }: Props) {
   if (items.length === 0) {
     return (
       <div className="flex items-center justify-center px-6 py-20">
@@ -26,6 +27,7 @@ export function GalleryGrid({ items, onSelect, activeId, registerAnchor }: Props
           item={item}
           onSelect={onSelect}
           hidden={activeId === item.id}
+          enableReactions={enableReactions}
           registerAnchor={registerAnchor}
         />
       ))}

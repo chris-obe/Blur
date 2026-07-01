@@ -218,14 +218,14 @@ export function cleanAlbumSlug(value: unknown, fallbackTitle = ''): string {
 export function albumFromRow(
   row: GalleryAlbumRow,
   photos: unknown[] = [],
-  options: { coverPhotoId?: string | null } = {},
+  options: { coverPhotoId?: string | null; includeOwnerSub?: boolean } = {},
 ) {
   return {
     slug: row.slug,
     title: row.title,
     description: row.description,
     status: row.status,
-    ownerSub: row.owner_sub ?? undefined,
+    ownerSub: options.includeOwnerSub ? row.owner_sub ?? undefined : undefined,
     ownerName: row.owner_name ?? undefined,
     hasPassword: !!row.password_hash,
     coverPhotoId: options.coverPhotoId ?? row.cover_photo_id ?? undefined,
@@ -367,7 +367,7 @@ export async function publicAlbumWithPhotos(env: GalleryEnv, slug: string, passw
 
 export async function adminAlbumWithPhotos(env: GalleryEnv, row: GalleryAlbumRow) {
   const photos = await albumPhotos(env, row, { admin: true });
-  return albumFromRow(row, photos, { coverPhotoId: row.cover_photo_id ?? photos[0]?.id ?? null });
+  return albumFromRow(row, photos, { coverPhotoId: row.cover_photo_id ?? photos[0]?.id ?? null, includeOwnerSub: true });
 }
 
 export async function albumContainsVisiblePhoto(env: GalleryEnv, slug: string, photoId: string): Promise<boolean> {
@@ -427,7 +427,7 @@ export async function ownedAlbumWithPhotos(env: GalleryEnv, slug: string, ownerS
     .first<GalleryAlbumRow>();
   if (!row) return null;
   const photos = await ownedAlbumPhotos(env, slug, ownerSub);
-  return albumFromRow(row, photos, { coverPhotoId: row.cover_photo_id ?? photos[0]?.id ?? null });
+  return albumFromRow(row, photos, { coverPhotoId: row.cover_photo_id ?? photos[0]?.id ?? null, includeOwnerSub: true });
 }
 
 export async function ownedAlbumPhotos(env: GalleryEnv, slug: string, ownerSub: string) {

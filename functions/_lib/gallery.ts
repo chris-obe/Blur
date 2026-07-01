@@ -129,14 +129,15 @@ export async function findPhoto(env: GalleryEnv, id: string): Promise<GalleryRow
 export async function imageResponse(
   env: GalleryEnv,
   row: GalleryRow,
-  options: { publicCache?: boolean } = {},
+  options: { publicCache?: boolean; forceNoStore?: boolean } = {},
 ) {
   const object = await env.GALLERY_BUCKET.get(row.object_key);
   if (!object) return json({ error: 'image not found' }, { status: 404 });
 
   const headers = new Headers();
   headers.set('content-type', row.content_type || object.httpMetadata?.contentType || 'application/octet-stream');
-  headers.set('cache-control', options.publicCache || galleryStatusFromRow(row) === 'approved' ? 'public, max-age=300' : 'no-store');
+  const publiclyCacheable = options.publicCache || galleryStatusFromRow(row) === 'approved';
+  headers.set('cache-control', options.forceNoStore ? 'no-store' : publiclyCacheable ? 'public, max-age=300' : 'no-store');
   if (object.httpEtag) headers.set('etag', object.httpEtag);
 
   return new Response(object.body, { headers });

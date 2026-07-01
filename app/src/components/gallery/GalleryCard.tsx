@@ -6,10 +6,11 @@ interface Props {
   item: GalleryItem;
   onSelect: (item: GalleryItem) => void;
   hidden?: boolean; // active in the lightbox — hide the thumbnail so the morph isn't doubled
+  enableReactions?: boolean;
   registerAnchor: (id: string, el: HTMLElement | null) => void;
 }
 
-export function GalleryCard({ item, onSelect, hidden, registerAnchor }: Props) {
+export function GalleryCard({ item, onSelect, hidden, enableReactions = true, registerAnchor }: Props) {
   return (
     <div className="group relative flex flex-col border border-line transition-colors hover:border-line-strong">
       {/* clickable image (the morph anchor box) */}
@@ -28,10 +29,11 @@ export function GalleryCard({ item, onSelect, hidden, registerAnchor }: Props) {
         </div>
       </button>
 
-      {/* reaction control — sibling of the click target (no nested buttons) */}
-      <div className="absolute right-2 top-2 z-10">
-        <ReactionBar photoId={item.id} mode="compact" />
-      </div>
+      {enableReactions && (
+        <div className="absolute right-2 top-2 z-10">
+          <ReactionBar photoId={item.id} mode="compact" />
+        </div>
+      )}
 
       <button
         type="button"

@@ -20,5 +20,6 @@ export const onRequestGet: PagesFunction<GalleryEnv> = async ({ env, params, req
 
   const album = await publicAlbumWithPhotos(env, slug, password);
   if (!album) return json({ error: 'album not found' }, { status: 404 });
-  return publicJson({ album, photos: album.photos });
+  const body = { album, photos: album.photos };
+  return row.password_hash ? json(body) : publicJson(body);
 };

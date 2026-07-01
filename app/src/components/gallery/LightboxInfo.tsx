@@ -6,7 +6,7 @@ import { ReactionBar } from '../ui/ReactionBar';
 import { PhotoOpticsPanel } from './PhotoOpticsPanel';
 import type { ViewEntry } from '../../lib/types';
 
-export function LightboxInfo({ entry }: { entry: ViewEntry }) {
+export function LightboxInfo({ entry, enableReactions = true }: { entry: ViewEntry; enableReactions?: boolean }) {
   const { cameras, lenses } = useKit();
   const { add: addToCompare } = useCompare();
   const navigate = useNavigate();
@@ -18,7 +18,7 @@ export function LightboxInfo({ entry }: { entry: ViewEntry }) {
         <div className="label mt-1">{entry.metaLine}</div>
       </div>
 
-      {entry.id !== 'upload' && (
+      {enableReactions && entry.id !== 'upload' && (
         <div>
           <div className="label mb-2">What did you think?</div>
           <ReactionBar photoId={entry.id} mode="expanded" />

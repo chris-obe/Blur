@@ -52,10 +52,12 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, params, request 
   if (!subjectPreset) return json({ error: 'subject distance preset is required' }, { status: 400 });
   const subjectWidthM = subjectWidthForPreset(subjectPreset);
 
+  const currentGalleryStatus = galleryStatusFromRow(current);
+  const incomingHasGalleryStatus = body.galleryStatus !== undefined || body.status !== undefined;
   const next = {
     title: stringValue(body.title, current.title),
     author: stringValue(body.author, current.author),
-    galleryStatus: galleryStatusValue(body.galleryStatus ?? body.status, galleryStatusFromRow(current)),
+    galleryStatus: galleryStatusValue(body.galleryStatus ?? body.status, currentGalleryStatus),
     formatId,
     camera: stringValue(body.camera, current.camera),
     cameraCatalogId: nullableStringValue(body.cameraCatalogId, current.camera_catalog_id),
@@ -77,10 +79,13 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, params, request 
   const now = new Date().toISOString();
   const nextLegacyStatus = legacyStatusFromGalleryStatus(next.galleryStatus);
   const publishedAt = next.galleryStatus === 'approved' ? current.published_at ?? now : null;
+  const reviewResolved = body.galleryStatusReviewed === true ||
+    (incomingHasGalleryStatus && next.galleryStatus !== currentGalleryStatus);
+  const reviewRequired = reviewResolved ? 0 : current.gallery_status_review_required ?? 0;
 
   await env.GALLERY_DB.prepare(
     `UPDATE gallery_photos
-     SET title = ?, author = ?, status = ?, gallery_status = ?, gallery_status_review_required = 0,
+     SET title = ?, author = ?, status = ?, gallery_status = ?, gallery_status_review_required = ?,
          format_id = ?, camera = ?, camera_catalog_id = ?,
          lens = ?, lens_catalog_id = ?, focal = ?, aperture = ?, tags_json = ?,
          subject_preset = ?, subject_width_m = ?, shutter_speed = ?, iso = ?, captured_at = ?,
@@ -92,6 +97,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ env, params, request 
       next.author,
       nextLegacyStatus,
       next.galleryStatus,
+      reviewRequired,
       next.formatId,
       next.camera,
       next.cameraCatalogId,

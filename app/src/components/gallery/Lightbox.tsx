@@ -7,10 +7,11 @@ interface Props {
   index: number;
   onIndex: (index: number) => void;
   onClose: () => void;
+  enableReactions?: boolean;
   getAnchorRect: (id: string) => DOMRect | null;
 }
 
-export function Lightbox({ list, index, onIndex, onClose, getAnchorRect }: Props) {
+export function Lightbox({ list, index, onIndex, onClose, enableReactions = true, getAnchorRect }: Props) {
   return (
     <PhotoLightbox
       entries={list}
@@ -18,7 +19,7 @@ export function Lightbox({ list, index, onIndex, onClose, getAnchorRect }: Props
       onIndex={onIndex}
       onClose={onClose}
       getAnchorRect={getAnchorRect}
-      renderInfo={(entry) => <LightboxInfo entry={entry} />}
+      renderInfo={(entry) => <LightboxInfo entry={entry} enableReactions={enableReactions} />}
     />
   );
 }

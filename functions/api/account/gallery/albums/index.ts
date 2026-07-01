@@ -85,7 +85,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       created_at: now,
       updated_at: now,
       published_at: publishedAt,
-    }) }, { status: 201 });
+    }, [], { includeOwnerSub: true }) }, { status: 201 });
   } catch (error) {
     return adminAuthError(error);
   }

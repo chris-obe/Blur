@@ -26,5 +26,8 @@ export const onRequestGet: PagesFunction<GalleryEnv> = async ({ env, params, req
     .first<GalleryRow>();
   if (!row) return json({ error: 'image not found' }, { status: 404 });
 
-  return imageResponse(env, row, { publicCache: true });
+  return imageResponse(env, row, {
+    publicCache: !album.password_hash,
+    forceNoStore: !!album.password_hash,
+  });
 };

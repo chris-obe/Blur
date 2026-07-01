@@ -238,6 +238,7 @@ export function GalleryPage({ albumSlug, initialPhotoId, closePath }: GalleryPag
 
   const current = view ? view.list[view.index] : null;
   const activeId = current?.morph ? current.id : null;
+  const enableReactions = !albumSlug;
 
   return (
     <div className="flex flex-col">
@@ -298,6 +299,7 @@ export function GalleryPage({ albumSlug, initialPhotoId, closePath }: GalleryPag
             items={filtered}
             onSelect={onSelectCard}
             activeId={activeId}
+            enableReactions={enableReactions}
             registerAnchor={registerAnchor}
           />
 
@@ -307,6 +309,7 @@ export function GalleryPage({ albumSlug, initialPhotoId, closePath }: GalleryPag
               index={view.index}
               onIndex={(i) => setView((v) => (v ? { ...v, index: i } : v))}
               onClose={closeView}
+              enableReactions={enableReactions}
               getAnchorRect={getAnchorRect}
             />
           )}
