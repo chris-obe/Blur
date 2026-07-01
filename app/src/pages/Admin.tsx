@@ -14,7 +14,6 @@ import {
   Download,
   HardDrive,
   ImagePlus,
-  Info,
   RefreshCw,
   Shield,
   SlidersHorizontal,
@@ -678,77 +677,64 @@ function CatalogSection({
         </Panel>
 
         <Panel title="Build controls" icon={RefreshCw}>
-          <div className="grid min-h-[9rem] gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="flex min-w-0 flex-col justify-between border border-line p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="label mb-2">Auto-rebuild</div>
-                  <div className="truncate text-sm font-bold">
-                    {status?.settings.autoRefreshEnabled ? 'Enabled' : 'Disabled'}
-                  </div>
+          <div className="grid min-h-[8.75rem] gap-2 border border-line p-3">
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="label mb-1">Auto-rebuild</div>
+                <div className="truncate text-sm font-bold">
+                  {status?.settings.autoRefreshEnabled ? 'Enabled' : 'Disabled'}
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={!!status?.settings.autoRefreshEnabled}
-                  title="Toggle automatic catalog rebuilds"
-                  onClick={onToggleAutoRefresh}
-                  disabled={!status || loading || saving}
-                  className="inline-flex h-8 w-14 shrink-0 items-center border border-line p-1 transition-colors hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <span
-                    className={[
-                      'h-5 w-5 transition-transform',
-                      status?.settings.autoRefreshEnabled ? 'translate-x-6 bg-fg' : 'translate-x-0 bg-muted',
-                    ].join(' ')}
-                  />
-                </button>
               </div>
-
-              <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                <label className="min-w-0">
-                  <span className="label mb-1 block">Interval days</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={365}
-                    value={draftDays}
-                    title="Days between automatic rebuild attempts"
-                    onChange={(event) => setDraftDays(Number(event.target.value))}
-                    className="h-9 w-full border border-line bg-transparent px-3 text-sm outline-none focus:border-line-strong"
-                  />
-                </label>
-                <button
-                  type="button"
-                  title="Save rebuild interval"
-                  aria-label="Save rebuild interval"
-                  onClick={() => onUpdateInterval(draftDays)}
-                  disabled={!status || loading || saving || draftDays < 1 || draftDays > 365}
-                  className="mt-auto flex h-9 w-9 items-center justify-center border border-line transition-colors hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <CheckCircle2 size={14} strokeWidth={1.5} />
-                </button>
-              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!!status?.settings.autoRefreshEnabled}
+                title="Toggle automatic catalog rebuilds"
+                onClick={onToggleAutoRefresh}
+                disabled={!status || loading || saving}
+                className="inline-flex h-7 w-12 shrink-0 items-center border border-line p-1 transition-colors hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <span
+                  className={[
+                    'h-4 w-4 transition-transform',
+                    status?.settings.autoRefreshEnabled ? 'translate-x-5 bg-fg' : 'translate-x-0 bg-muted',
+                  ].join(' ')}
+                />
+              </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:w-24 sm:grid-cols-1">
+            <div className="grid grid-cols-[minmax(0,1fr)_2rem_2rem] items-end gap-2">
+              <label className="min-w-0">
+                <span className="label mb-1 block">Interval</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={draftDays}
+                  title="Days between automatic rebuild attempts"
+                  onChange={(event) => setDraftDays(Number(event.target.value))}
+                  className="h-8 w-full border border-line bg-transparent px-2 text-sm outline-none focus:border-line-strong"
+                />
+              </label>
+              <button
+                type="button"
+                title="Save rebuild interval"
+                aria-label="Save rebuild interval"
+                onClick={() => onUpdateInterval(draftDays)}
+                disabled={!status || loading || saving || draftDays < 1 || draftDays > 365}
+                className="flex h-8 w-8 items-center justify-center border border-line transition-colors hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <CheckCircle2 size={13} strokeWidth={1.5} />
+              </button>
               <button
                 type="button"
                 title="Rebuild catalog now"
                 aria-label="Rebuild catalog now"
                 onClick={onRefreshNow}
                 disabled={loading || saving}
-                className="flex min-h-16 items-center justify-center border border-fg bg-fg text-bg transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-8 w-8 items-center justify-center border border-fg bg-fg text-bg transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <RefreshCw size={18} strokeWidth={1.5} />
-              </button>
-              <button
-                type="button"
-                title="Build controls affect the Cloudflare catalog refresh worker"
-                aria-label="Catalog build control help"
-                className="flex min-h-16 items-center justify-center border border-line text-muted transition-colors hover:border-line-strong hover:text-fg"
-              >
-                <Info size={18} strokeWidth={1.5} />
+                <RefreshCw size={14} strokeWidth={1.5} />
               </button>
             </div>
           </div>
