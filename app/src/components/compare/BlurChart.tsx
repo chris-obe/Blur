@@ -5,7 +5,7 @@ import { Group } from '@visx/group';
 import { AxisBottom, AxisLeft } from '@visx/axis';
 import { localPoint } from '@visx/event';
 import { ParentSize } from '@visx/responsive';
-import { Ruler } from 'lucide-react';
+import { Layers, Ruler } from 'lucide-react';
 import { compareLineColor, compareLineStyle } from '../../lib/compareStyles';
 import { blurFraction, fieldOfView, focusDistanceForFraming } from '../../lib/engine';
 import { systemLabel, systemOpticsLabel, systemSourceLabel, type CompareSystem } from '../../store/CompareProvider';
@@ -15,6 +15,14 @@ const MARGIN = { top: 14, right: 18, bottom: 34, left: 46 };
 const MIN_BG_BEHIND_M = 0.1;
 const MAX_BG_BEHIND_M = 200;
 type ReadoutMode = 'fixed' | 'tracked';
+
+const DEPTH_BANDS = [
+  { id: 'small-room', label: 'Small room', shortLabel: 'Small room', fromM: 0.1, toM: 5, opacity: 0.055 },
+  { id: 'large-room', label: 'Large room', shortLabel: 'Large room', fromM: 5, toM: 20, opacity: 0.035 },
+  { id: 'garden-street', label: 'Garden / street', shortLabel: 'Garden', fromM: 20, toM: 40, opacity: 0.055 },
+  { id: 'open-distance', label: 'Open distance', shortLabel: 'Open', fromM: 40, toM: 200, opacity: 0.035 },
+] as const;
+const DEPTH_LABEL_MIN_WIDTH = 72;
 
 interface Pt {
   behindM: number;
@@ -51,6 +59,7 @@ function Inner({
   height,
   series,
   showContext,
+  showDepthBands,
   readoutMode,
   trackedSeriesIds,
 }: {
@@ -58,6 +67,7 @@ function Inner({
   height: number;
   series: Series[];
   showContext: boolean;
+  showDepthBands: boolean;
   readoutMode: ReadoutMode;
   trackedSeriesIds: string[];
 }) {
@@ -120,6 +130,30 @@ function Inner({
     <div className="relative">
       <svg width={width} height={height} className="touch-none">
         <Group left={MARGIN.left} top={MARGIN.top}>
+          {showDepthBands &&
+            DEPTH_BANDS.map((band) => {
+              const x0 = xScale(Math.max(band.fromM, MIN_BG_BEHIND_M));
+              const x1 = xScale(Math.min(band.toM, MAX_BG_BEHIND_M));
+              const bandWidth = Math.max(0, x1 - x0);
+              return (
+                <g key={band.id} pointerEvents="none">
+                  <rect x={x0} y={0} width={bandWidth} height={innerH} fill="var(--fg)" opacity={band.opacity} />
+                  {bandWidth >= DEPTH_LABEL_MIN_WIDTH && (
+                    <text
+                      x={x0 + 8}
+                      y={14}
+                      fill="var(--muted)"
+                      fontSize={10}
+                      fontWeight={700}
+                      letterSpacing={0.2}
+                    >
+                      {band.shortLabel}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+
           <AxisLeft
             scale={yScale}
             numTicks={4}
@@ -209,7 +243,9 @@ function Inner({
                     <span className="tabular-nums font-bold">{(v as number).toFixed(1)}%</span>
                     <span className="min-w-0 truncate text-muted">
                       {s.optionLabel} · {s.sourceLabel}
-                      {showContext ? ` · stand ${formatDistance(s.focusM)} · ${Math.round(s.fovH)}° FOV` : ''}
+                      {showContext
+                        ? ` · stand ${formatDistance(s.focusM)} · camera to bg ≈ ${formatDistance(s.focusM + cursor)} · ${Math.round(s.fovH)}° FOV`
+                        : ''}
                     </span>
                   </div>
                 ))}
@@ -328,7 +364,8 @@ function TrackedReadout({ readout, showContext }: { readout: TrackedReadoutLayou
       </div>
       {showContext && (
         <div className="label mt-2 truncate">
-          {series.sourceLabel} · stand {formatDistance(series.focusM)} · {Math.round(series.fovH)}° FOV
+          {series.sourceLabel} · stand {formatDistance(series.focusM)} · camera to bg ≈{' '}
+          {formatDistance(series.focusM + behindM)} · {Math.round(series.fovH)}° FOV
         </div>
       )}
     </div>
@@ -385,6 +422,7 @@ export function BlurChart({
   focusOverrideM: number | null;
 }) {
   const [showContext, setShowContext] = useState(true);
+  const [showDepthBands, setShowDepthBands] = useState(true);
   const [readoutMode, setReadoutMode] = useState<ReadoutMode>('fixed');
   const [trackedSeriesIds, setTrackedSeriesIds] = useState<string[] | null>(null);
   const series: Series[] = useMemo(
@@ -430,6 +468,7 @@ export function BlurChart({
         <div>
           <div className="text-xs font-bold uppercase tracking-wide">Background blur by framing</div>
           <div className="label mt-1">x = background distance behind subject · y = blur as % of frame width</div>
+          {showDepthBands && <DepthLegend />}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex border border-line">
@@ -459,6 +498,19 @@ export function BlurChart({
           )}
           <button
             type="button"
+            onClick={() => setShowDepthBands((current) => !current)}
+            aria-pressed={showDepthBands}
+            title="Show background depth bands"
+            className={[
+              'inline-flex items-center gap-2 border px-3 py-1.5 text-xs uppercase tracking-wide transition-colors',
+              showDepthBands ? 'border-fg bg-fg text-bg' : 'border-line hover:border-line-strong',
+            ].join(' ')}
+          >
+            <Layers size={14} strokeWidth={1.5} />
+            Depth
+          </button>
+          <button
+            type="button"
             onClick={() => setShowContext((current) => !current)}
             aria-pressed={showContext}
             title="Show standing distance and horizontal FOV"
@@ -485,6 +537,7 @@ export function BlurChart({
                 height={height}
                 series={series}
                 showContext={showContext}
+                showDepthBands={showDepthBands}
                 readoutMode={readoutMode}
                 trackedSeriesIds={activeTrackedSeriesIds}
               />
@@ -492,6 +545,22 @@ export function BlurChart({
           </ParentSize>
         </div>
       )}
+    </div>
+  );
+}
+
+function DepthLegend() {
+  return (
+    <div className="mt-2 flex max-w-full flex-wrap items-center gap-x-3 gap-y-1">
+      {DEPTH_BANDS.map((band) => (
+        <span key={band.id} className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted">
+          <span
+            className="h-2 w-4 border border-line"
+            style={{ backgroundColor: 'var(--fg)', opacity: band.opacity * 4 }}
+          />
+          <span>{band.label}</span>
+        </span>
+      ))}
     </div>
   );
 }
