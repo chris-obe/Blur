@@ -9,6 +9,8 @@ import { Tooltip } from '../ui/Tooltip';
 
 const slotField =
   'h-8 w-16 border border-line bg-transparent px-1.5 text-xs outline-none focus:border-line-strong';
+const readOnlyField =
+  'flex h-8 min-w-0 items-center border border-line px-2 text-xs';
 
 // The systems currently plotted — lives in the Compare sidebar on desktop.
 export function SystemList() {
@@ -69,10 +71,12 @@ function SystemRow({
         </button>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-end gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="label">Format</div>
-          <div className="truncate text-xs">{system.format.name} · {cropFactor(system.format).toFixed(1)}x</div>
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_4rem_4rem] items-end gap-2">
+        <div className="min-w-0">
+          <div className="label mb-1">Format</div>
+          <div className={readOnlyField}>
+            <span className="truncate">{system.format.name} · {cropFactor(system.format).toFixed(1)}x</span>
+          </div>
         </div>
         <label className="flex flex-col gap-1">
           <span className="label">Focal</span>
