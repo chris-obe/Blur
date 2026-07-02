@@ -11,8 +11,14 @@ import {
   Square,
   TriangleAlert,
 } from 'lucide-react';
-import { useAuth0 } from '@auth0/auth0-react';
-import { adminTokenParams } from '../../auth/config';
+import {
+  queryKeys,
+  useAdminEmbedSettingsQuery,
+  useAdminGalleryAlbumsQuery,
+  useAdminGalleryPhotosQuery,
+  useAdminToken,
+  useInvalidate,
+} from '../../hooks/queries';
 import {
   DEFAULT_EMBED_TEMPLATE,
   EMBED_FIELD_OPTIONS,
@@ -27,38 +33,45 @@ import {
 import { albumEmbedUrl, clampEmbedLongEdge, iframeSnippet, photoEmbedUrl } from '../../lib/embedSnippet';
 import { GALLERY_FORMAT_OPTIONS, formatOptionLabel } from '../../lib/galleryFormat';
 import {
-  getAdminEmbedSettings,
-  listAdminGalleryAlbums,
-  listAdminGalleryPhotos,
   updateAdminEmbedSettings,
-  type AdminGalleryPhoto,
   type EmbedFieldId,
   type EmbedGalleryModeTemplate,
   type EmbedModeTemplate,
   type EmbedTemplate,
-  type GalleryAlbum,
 } from '../../lib/galleryApi';
 import { EmbedGalleryCard } from '../embed/EmbedGalleryCard';
 import { PhotoEmbedCard } from '../embed/PhotoEmbedCard';
 import { Button } from '../ui/Button';
 
 export function BlogEmbedManager() {
-  const { getAccessTokenSilently, isAuthenticated } = useAuth0();
+  // Server data comes from the shared query seam; `template` stays local state
+  // because it is an editable draft seeded from the saved settings.
+  const getToken = useAdminToken();
+  const invalidate = useInvalidate();
+  const settingsQuery = useAdminEmbedSettingsQuery();
+  const photosQuery = useAdminGalleryPhotosQuery();
+  const albumsQuery = useAdminGalleryAlbumsQuery();
   const [template, setTemplate] = useState<EmbedTemplate>(DEFAULT_EMBED_TEMPLATE);
   const [mode, setMode] = useState<'image' | 'gallery'>('image');
-  const [photos, setPhotos] = useState<AdminGalleryPhoto[]>([]);
-  const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
   const [previewPhotoId, setPreviewPhotoId] = useState('');
   const [previewAlbumSlug, setPreviewAlbumSlug] = useState('');
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [dragFieldId, setDragFieldId] = useState<EmbedFieldId | null>(null);
   const [dragSource, setDragSource] = useState<'visible' | 'hidden' | null>(null);
 
-  const getToken = async () =>
-    isAuthenticated ? getAccessTokenSilently({ authorizationParams: adminTokenParams }) : undefined;
+  const photos = useMemo(() => photosQuery.data ?? [], [photosQuery.data]);
+  const albums = useMemo(() => albumsQuery.data ?? [], [albumsQuery.data]);
+  const loading = settingsQuery.isPending || photosQuery.isPending || albumsQuery.isPending;
+  const queryError = [settingsQuery.error, photosQuery.error, albumsQuery.error].find(Boolean);
+  const error = mutationError
+    ?? (queryError ? (queryError instanceof Error ? queryError.message : 'Embed settings failed to load') : null);
+
+  // Seed the editable draft whenever the saved settings (re)load.
+  useEffect(() => {
+    if (settingsQuery.data) setTemplate(settingsQuery.data);
+  }, [settingsQuery.data]);
 
   const approvedPhotos = useMemo(() => photos.filter((photo) => photo.galleryStatus === 'approved'), [photos]);
   const publishedAlbums = useMemo(
@@ -96,42 +109,21 @@ export function BlogEmbedManager() {
   const visibleFieldSet = new Set(modeTemplate.visibleFields);
   const hiddenFields = EMBED_FIELD_OPTIONS.filter((field) => !visibleFieldSet.has(field.id));
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const token = await getToken();
-      const [nextTemplate, nextPhotos, nextAlbums] = await Promise.all([
-        getAdminEmbedSettings(token),
-        listAdminGalleryPhotos(token),
-        listAdminGalleryAlbums(token),
-      ]);
-      const approved = nextPhotos.filter((photo) => photo.galleryStatus === 'approved');
-      const published = nextAlbums.filter((album) => album.status === 'published' && !album.hasPassword);
-      setTemplate(nextTemplate);
-      setPhotos(nextPhotos);
-      setAlbums(nextAlbums);
-      setPreviewPhotoId((current) => current || approved[0]?.id || '');
-      setPreviewAlbumSlug((current) => current && published.some((album) => album.slug === current) ? current : '');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Embed settings failed to load');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Keep preview selections valid as the lists load/refresh.
   useEffect(() => {
-    void load();
+    setPreviewPhotoId((current) => current || approvedPhotos[0]?.id || '');
+    setPreviewAlbumSlug((current) => (current && publishedAlbums.some((album) => album.slug === current) ? current : ''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
+  }, [photos, albums]);
 
   const saveTemplate = async () => {
     setSaving(true);
-    setError(null);
+    setMutationError(null);
     try {
       setTemplate(await updateAdminEmbedSettings(template, await getToken()));
+      await invalidate(queryKeys.adminEmbedSettings, queryKeys.publicEmbedTemplate);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Embed template could not be saved');
+      setMutationError(err instanceof Error ? err.message : 'Embed template could not be saved');
     } finally {
       setSaving(false);
     }
@@ -140,7 +132,7 @@ export function BlogEmbedManager() {
   const resetTemplate = () => {
     setTemplate(cloneDefaultTemplate());
     setMode('image');
-    setError(null);
+    setMutationError(null);
   };
 
   const copyIframe = async () => {

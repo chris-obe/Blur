@@ -2,19 +2,14 @@ import { useEffect, useState } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Code2, FolderOpen, Heart, ImagePlus, Palette, RefreshCw, Save, Shield, User } from 'lucide-react';
 import { useAdminAccess } from '../auth/AdminAccessProvider';
-import { userTokenParams } from '../auth/config';
+import { queryKeys, useAccountSummaryQuery, useInvalidate, useUserToken } from '../hooks/queries';
 import { useTheme } from '../store/ThemeProvider';
 import { AccountAlbumsManager } from '../components/albums/AccountAlbumsManager';
 import { BlogEmbedManager } from '../components/settings/BlogEmbedManager';
 import { GalleryTagsManager } from '../components/settings/GalleryTagsManager';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
-import {
-  getAccountSummary,
-  updateAccountProfile,
-  type AccountProfile,
-  type AccountSummary,
-} from '../lib/accountApi';
+import { updateAccountProfile, type AccountProfile } from '../lib/accountApi';
 
 type SettingsSection = 'profile' | 'albums' | 'embeds' | 'tags' | 'appearance';
 
@@ -112,45 +107,41 @@ function EmbedsSection() {
 }
 
 function ProfileSection() {
-  const { getAccessTokenSilently, isAuthenticated, isLoading, loginWithRedirect, user } = useAuth0();
+  const { isAuthenticated, loginWithRedirect, user } = useAuth0();
   const { isAdmin } = useAdminAccess();
-  const [account, setAccount] = useState<AccountSummary | null>(null);
+  const getToken = useUserToken();
+  const invalidate = useInvalidate();
+  const summaryQuery = useAccountSummaryQuery();
   const [draft, setDraft] = useState<AccountProfile>({ displayName: '', bio: '', website: '' });
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
+
+  const account = summaryQuery.data ?? null;
+  const loading = isAuthenticated && summaryQuery.isPending;
+  const error = mutationError
+    ?? (summaryQuery.error
+      ? summaryQuery.error instanceof Error ? summaryQuery.error.message : 'Account lookup failed'
+      : null);
+
+  // Seed the editable draft whenever the account summary (re)loads.
+  useEffect(() => {
+    if (summaryQuery.data) setDraft(summaryQuery.data.profile);
+  }, [summaryQuery.data]);
 
   const load = async () => {
-    if (!isAuthenticated) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const token = await getAccessTokenSilently({ authorizationParams: userTokenParams });
-      const next = await getAccountSummary(token);
-      setAccount(next);
-      setDraft(next.profile);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Account lookup failed');
-    } finally {
-      setLoading(false);
-    }
+    setMutationError(null);
+    await invalidate(queryKeys.accountSummary(user?.sub ?? ''));
   };
-
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, isLoading]);
 
   const save = async () => {
     setSaving(true);
-    setError(null);
+    setMutationError(null);
     try {
-      const token = await getAccessTokenSilently({ authorizationParams: userTokenParams });
-      const next = await updateAccountProfile(token, draft);
-      setAccount(next);
+      const next = await updateAccountProfile(await getToken(), draft);
       setDraft(next.profile);
+      await invalidate(queryKeys.accountSummary(user?.sub ?? ''));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Profile update failed');
+      setMutationError(err instanceof Error ? err.message : 'Profile update failed');
     } finally {
       setSaving(false);
     }

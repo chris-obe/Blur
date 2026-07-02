@@ -1,21 +1,14 @@
-import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { EmbedGalleryCard } from '../components/embed/EmbedGalleryCard';
-import {
-  getEmbedAlbum,
-  getEmbedPhotoSet,
-  type EmbedAlbumLayout,
-  type EmbedGalleryResponse,
-} from '../lib/galleryApi';
+import { type EmbedAlbumLayout } from '../lib/galleryApi';
 import type { GalleryItem } from '../lib/types';
+import { useEmbedAlbumQuery, useEmbedPhotoSetQuery } from '../hooks/queries';
 
 // One page for both multi-image routes: album auto-select (/embed/album/:slug)
 // and selected-set (/embed/photos?ids=…). Layout comes from ?layout, else template.
 export function EmbedGallery({ mode }: { mode: 'album' | 'set' }) {
   const { albumSlug = '' } = useParams();
   const [params] = useSearchParams();
-  const [data, setData] = useState<EmbedGalleryResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const ids = params.get('ids') ?? '';
   const count = params.get('count');
@@ -24,24 +17,19 @@ export function EmbedGallery({ mode }: { mode: 'album' | 'set' }) {
     ? layoutParam
     : undefined;
 
-  useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    setData(null);
-    const request = mode === 'album'
-      ? getEmbedAlbum(albumSlug, { count: count ? Number(count) : undefined, layout: requestedLayout })
-      : getEmbedPhotoSet(ids.split(',').map((value) => value.trim()).filter(Boolean), { layout: requestedLayout });
-    request
-      .then((next) => {
-        if (!cancelled) setData(next);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Embed failed to load');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [mode, albumSlug, ids, count, requestedLayout]);
+  const albumQuery = useEmbedAlbumQuery(mode === 'album' ? albumSlug : '', {
+    count: count ? Number(count) : undefined,
+    layout: requestedLayout,
+  });
+  const setQuery = useEmbedPhotoSetQuery(
+    mode === 'set' ? ids.split(',').map((value) => value.trim()).filter(Boolean) : [],
+    { layout: requestedLayout },
+  );
+  const active = mode === 'album' ? albumQuery : setQuery;
+  const data = active.data ?? null;
+  const error = active.error
+    ? active.error instanceof Error ? active.error.message : 'Embed failed to load'
+    : null;
 
   if (error) {
     return (

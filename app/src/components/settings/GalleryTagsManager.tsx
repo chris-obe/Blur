@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useState } from 'react';
 import { AlertTriangle, Plus, RefreshCw, Tags } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { adminTokenParams } from '../../auth/config';
+import { queryKeys, useAdminTagsQuery, useAdminToken, useInvalidate } from '../../hooks/queries';
 import {
   archiveAdminGalleryTag,
   createAdminGalleryTag,
-  listAdminGalleryTags,
   updateAdminGalleryTag,
   type GalleryTag,
 } from '../../lib/galleryApi';
@@ -21,44 +19,37 @@ function formatDate(value?: string | null): string {
 // Self-contained gallery tag CRUD. Loads its own data via the admin API and
 // owns its token, so it can be dropped anywhere (here: Settings → Tags).
 export function GalleryTagsManager() {
-  const { getAccessTokenSilently, isAuthenticated } = useAuth0();
-  const [tags, setTags] = useState<GalleryTag[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const getToken = useAdminToken();
+  const invalidate = useInvalidate();
+  const tagsQuery = useAdminTagsQuery();
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [edits, setEdits] = useState<Record<string, string>>({});
 
-  const getToken = async () =>
-    isAuthenticated ? getAccessTokenSilently({ authorizationParams: adminTokenParams }) : undefined;
+  const tags = tagsQuery.data ?? [];
+  const loading = tagsQuery.isPending || tagsQuery.isRefetching;
+  const error = mutationError
+    ?? (tagsQuery.error
+      ? tagsQuery.error instanceof Error ? tagsQuery.error.message : 'Gallery tags API failed'
+      : null);
 
   const loadTags = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setTags(await listAdminGalleryTags(await getToken()));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gallery tags API failed');
-    } finally {
-      setLoading(false);
-    }
+    setMutationError(null);
+    await invalidate(queryKeys.adminTags);
   };
-
-  useEffect(() => {
-    void loadTags();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
 
   const create = async () => {
     if (!draft.trim()) return;
     setBusy('new');
+    setMutationError(null);
     try {
       await createAdminGalleryTag(draft, await getToken());
       setDraft('');
-      await loadTags();
+      await invalidate(queryKeys.adminTags);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create tag');
+      setMutationError(err instanceof Error ? err.message : 'Could not create tag');
     } finally {
       setBusy(null);
     }
@@ -66,6 +57,7 @@ export function GalleryTagsManager() {
 
   const update = async (slug: string, updates: Partial<Pick<GalleryTag, 'label' | 'archived'>>) => {
     setBusy(slug);
+    setMutationError(null);
     try {
       await updateAdminGalleryTag(slug, updates, await getToken());
       setEdits((current) => {
@@ -73,9 +65,9 @@ export function GalleryTagsManager() {
         delete copy[slug];
         return copy;
       });
-      await loadTags();
+      await invalidate(queryKeys.adminTags);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update tag');
+      setMutationError(err instanceof Error ? err.message : 'Could not update tag');
     } finally {
       setBusy(null);
     }
@@ -83,11 +75,12 @@ export function GalleryTagsManager() {
 
   const archive = async (slug: string) => {
     setBusy(slug);
+    setMutationError(null);
     try {
       await archiveAdminGalleryTag(slug, await getToken());
-      await loadTags();
+      await invalidate(queryKeys.adminTags);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not archive tag');
+      setMutationError(err instanceof Error ? err.message : 'Could not archive tag');
     } finally {
       setBusy(null);
     }
