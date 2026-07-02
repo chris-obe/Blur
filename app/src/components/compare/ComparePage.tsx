@@ -24,8 +24,8 @@ export function ComparePage() {
       <div className="order-1 flex min-w-0 flex-1 flex-col gap-4 p-4 lg:order-2 lg:p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <p className="max-w-prose text-sm text-muted">
-            Pick how much of the frame the subject occupies. The chart calculates where each system must stand to frame that subject,
-            then plots how blurry the background becomes as it falls farther behind the subject.
+            Use framing presets for portraits, groups, and landscapes. Match framing calculates each system's standing distance.
+            Fixed position compares every system from the same camera-to-subject distance.
           </p>
           <CompareGalleryExamplesToggle open={examplesOpen} onToggle={() => setExamplesOpen((current) => !current)} />
         </div>

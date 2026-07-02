@@ -25,16 +25,21 @@ export function SubjectControl({ width, onChange, focusM, onFocusChange }: Props
   // where the handle sits in framing mode: the distance a 50mm FF lens would frame this subject at
   const autoRef = focusDistanceForFraming(50, getFormat('ff'), width);
   const sliderDist = manual ? focusM : autoRef;
+  const setFramingWidth = (nextWidth: number) => {
+    onFocusChange(null);
+    onChange(nextWidth);
+  };
+  const enableFixedDistance = () => onFocusChange(sliderDist);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="label mr-1">Subject size</span>
+        <span className="label mr-1">Framing</span>
         {SUBJECT_DISTANCE_PRESETS.map((preset) => (
           <button
             key={preset.id}
             type="button"
-            onClick={() => onChange(preset.widthM)}
+            onClick={() => setFramingWidth(preset.widthM)}
             className={[
               'border px-2.5 py-1 text-xs transition-colors',
               !manual && width === preset.widthM
@@ -53,7 +58,7 @@ export function SubjectControl({ width, onChange, focusM, onFocusChange }: Props
         >
           <NumberField
             value={width}
-            onCommit={onChange}
+            onCommit={setFramingWidth}
             min={0.1}
             step={0.1}
             aria-label="Subject width in metres"
@@ -63,36 +68,69 @@ export function SubjectControl({ width, onChange, focusM, onFocusChange }: Props
         </label>
       </div>
 
-      {/* Manual focus distance — overrides framing for all systems while engaged */}
-      <div className="flex items-center gap-3">
-        <span className="label mr-1 whitespace-nowrap">Distance</span>
-        <input
-          type="range"
-          min={0}
-          max={1000}
-          value={distToSlider(sliderDist)}
-          onChange={(e) => onFocusChange(sliderToDist(Number(e.target.value)))}
-          aria-label="Focus distance"
-          className="h-1 min-w-0 flex-1 cursor-pointer appearance-none bg-line"
-          style={{ accentColor: 'var(--fg)' }}
-        />
-        <span className="w-28 shrink-0 text-xs tabular-nums">
-          {manual ? (
-            <span className="font-bold">{fmtDist(focusM)} fixed</span>
-          ) : (
-            <span className="text-muted">auto framing</span>
-          )}
-        </span>
-        {manual && (
+      <div className="flex flex-wrap items-center gap-3 border border-line px-3 py-2">
+        <div className="inline-flex shrink-0 border border-line">
           <button
             type="button"
             onClick={() => onFocusChange(null)}
-            aria-label="Reset to subject framing"
-            title="Back to subject framing"
-            className="flex h-6 w-6 shrink-0 items-center justify-center border border-line text-muted transition-colors hover:border-line-strong hover:text-fg"
+            aria-pressed={!manual}
+            title="Each system stands where it needs to match the selected framing"
+            className={[
+              'px-3 py-1.5 text-xs uppercase tracking-wide transition-colors',
+              !manual ? 'bg-fg text-bg' : 'hover:bg-faint',
+            ].join(' ')}
           >
-            <X size={13} strokeWidth={1.5} />
+            Match framing
           </button>
+          <button
+            type="button"
+            onClick={enableFixedDistance}
+            aria-pressed={manual}
+            title="Every system uses the same camera-to-subject distance"
+            className={[
+              'border-l border-line px-3 py-1.5 text-xs uppercase tracking-wide transition-colors',
+              manual ? 'bg-fg text-bg' : 'hover:bg-faint',
+            ].join(' ')}
+          >
+            Fixed position
+          </button>
+        </div>
+
+        {manual ? (
+          <div className="flex min-w-[min(100%,22rem)] flex-1 items-center gap-3">
+            <span className="label whitespace-nowrap">Camera to subject</span>
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              value={distToSlider(sliderDist)}
+              onChange={(e) => onFocusChange(sliderToDist(Number(e.target.value)))}
+              aria-label="Fixed camera-to-subject distance"
+              className="h-1 min-w-0 flex-1 cursor-pointer appearance-none bg-line"
+              style={{ accentColor: 'var(--fg)' }}
+            />
+            <span className="w-24 shrink-0 text-right text-xs font-bold tabular-nums">{fmtDist(focusM)}</span>
+            <button
+              type="button"
+              onClick={() => onFocusChange(null)}
+              aria-label="Reset to match framing"
+              title="Reset to match framing"
+              className="flex h-6 w-6 shrink-0 items-center justify-center border border-line text-muted transition-colors hover:border-line-strong hover:text-fg"
+            >
+              <X size={13} strokeWidth={1.5} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+            <span className="min-w-0">
+              <span className="label mr-1">Standing distance</span>
+              <span className="font-bold">per system</span>
+            </span>
+            <span className="min-w-0">
+              <span className="label mr-1">Background axis</span>
+              <span className="font-bold">+0.1-200m behind subject</span>
+            </span>
+          </div>
         )}
       </div>
     </div>
