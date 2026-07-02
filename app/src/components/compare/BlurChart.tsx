@@ -249,10 +249,10 @@ function Inner({
       {readoutMode === 'fixed' && (
         <div
           className={[
-            'pointer-events-none absolute left-12 right-4 space-y-1',
+            'pointer-events-none absolute left-12 w-fit space-y-1',
             cursor != null ? 'border border-line bg-bg/90 px-2 py-1' : '',
           ].join(' ')}
-          style={{ top: summaryReadoutTop }}
+          style={{ top: summaryReadoutTop, maxWidth: 'min(calc(100% - 4rem), 42rem)' }}
         >
           {cursor != null ? (
             <>
