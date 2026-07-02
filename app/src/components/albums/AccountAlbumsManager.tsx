@@ -408,6 +408,7 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
         const form = new FormData();
         form.set('id', `photo-${crypto.randomUUID()}`);
         form.set('file', processed.file);
+        if (processed.thumbFile) form.set('thumb', processed.thumbFile);
         form.set('title', metadata.title);
         form.set('camera', metadata.camera);
         form.set('cameraCatalogId', metadata.cameraCatalogId ?? '');

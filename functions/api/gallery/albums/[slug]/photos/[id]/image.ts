@@ -1,4 +1,4 @@
-import { imageResponse, json, type GalleryEnv, type GalleryRow } from '../../../../../../_lib/gallery';
+import { imageResponse, imageSizeFromRequest, json, type GalleryEnv, type GalleryRow } from '../../../../../../_lib/gallery';
 import { verifyAlbumAccessToken, type GalleryAlbumRow } from '../../../../../../_lib/embed';
 
 export const onRequestGet: PagesFunction<GalleryEnv> = async ({ env, params, request }) => {
@@ -29,5 +29,6 @@ export const onRequestGet: PagesFunction<GalleryEnv> = async ({ env, params, req
   return imageResponse(env, row, {
     publicCache: !album.password_hash,
     forceNoStore: !!album.password_hash,
+    size: imageSizeFromRequest(request),
   });
 };

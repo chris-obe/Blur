@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { computeMatch } from '../../lib/match';
 import { resolveGalleryFormat, formatDisplayName, GALLERY_FORMAT_OPTIONS } from '../../lib/galleryFormat';
@@ -69,7 +70,12 @@ export function EmbedPhotoFrame({
   const { format } = resolveGalleryFormat(photo.formatId);
   const targetFormat = GALLERY_FORMAT_OPTIONS.find((candidate) => candidate.id === template.defaultTargetFormatId)
     ?? GALLERY_FORMAT_OPTIONS[0];
-  const match = computeMatch(format, photo.focal, photo.aperture, { cameras: [], lenses: [] }, targetFormat, photo.subjectWidthM ?? 2);
+  // Grid embeds render many frames per parent render; keep the optics math out
+  // of the per-render path.
+  const match = useMemo(
+    () => computeMatch(format, photo.focal, photo.aperture, { cameras: [], lenses: [] }, targetFormat, photo.subjectWidthM ?? 2),
+    [format, photo.focal, photo.aperture, targetFormat, photo.subjectWidthM],
+  );
   const cards = metadataCards(photo, format, template.visibleFields).slice(0, MAX_METADATA_CARDS);
   const placement = placementOverride ?? template.metadataPlacement;
   const showMetadata = template.showMetadata && cards.length > 0;

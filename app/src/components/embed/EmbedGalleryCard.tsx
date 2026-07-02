@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { EmbedAlbumLayout, EmbedGalleryModeTemplate, GalleryAlbum } from '../../lib/galleryApi';
+import { thumbSrc } from '../../lib/imageSrc';
 import type { GalleryItem } from '../../lib/types';
 import { EmbedPhotoFrame, OpenButton, effectiveFrameWidth, frameColorValue, safeLongEdge, themeClasses } from './PhotoEmbedCard';
 
@@ -134,8 +135,10 @@ function ContactSheetCell({
     >
       <div className={['h-full w-full overflow-hidden', template.squareImages ? 'aspect-square' : 'min-h-40 bg-bg'].join(' ')}>
         <img
-          src={photo.src}
+          src={thumbSrc(photo.src)}
           alt={photo.title}
+          loading="lazy"
+          decoding="async"
           className={[
             'h-full w-full transition-transform duration-200 group-hover:scale-[1.015]',
             template.squareImages

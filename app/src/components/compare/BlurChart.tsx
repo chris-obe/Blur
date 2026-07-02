@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import { scaleLinear, scaleLog } from '@visx/scale';
 import { LinePath, Line } from '@visx/shape';
 import { Group } from '@visx/group';
@@ -455,10 +455,14 @@ export function BlurChart({
   const [showDepthBands, setShowDepthBands] = useState(true);
   const [readoutMode, setReadoutMode] = useState<ReadoutMode>('fixed');
   const [trackedSeriesIds, setTrackedSeriesIds] = useState<string[] | null>(null);
+  // Slider drags fire per input event; deferring the values keeps the curve
+  // recompute (~200 pts × N systems) off the interaction's critical path.
+  const deferredSubjectWidthM = useDeferredValue(subjectWidthM);
+  const deferredFocusOverrideM = useDeferredValue(focusOverrideM);
   const series: Series[] = useMemo(
     () =>
       systems.map((s, index) => {
-        const focusM = seriesFocusDistance(s, subjectWidthM, focusOverrideM);
+        const focusM = seriesFocusDistance(s, deferredSubjectWidthM, deferredFocusOverrideM);
         const color = compareLineColor(s.lineColor, index);
         const style = compareLineStyle(s.lineStyle, index);
         return {
@@ -473,7 +477,7 @@ export function BlurChart({
           points: blurBehindSubjectCurve(s, focusM),
         };
       }),
-    [systems, subjectWidthM, focusOverrideM],
+    [systems, deferredSubjectWidthM, deferredFocusOverrideM],
   );
   const allSeriesIds = useMemo(() => series.map((item) => item.id), [series]);
   const activeTrackedSeriesIds = useMemo(() => {

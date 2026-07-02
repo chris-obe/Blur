@@ -21,6 +21,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { categoryForFormat, formatLabel, type CategoryId } from '../../lib/categories';
+import { thumbSrc } from '../../lib/imageSrc';
 import type { GalleryItem, ViewEntry } from '../../lib/types';
 import { resolveGalleryFormat } from '../../lib/galleryFormat';
 import type { GalleryAlbumPhotoVisibility, GalleryAlbumStatus } from '../../lib/galleryApi';
@@ -436,9 +437,10 @@ function GallerySurfaceCard<T extends GallerySurfaceItem>({
             renderImage(item, 'h-full w-full object-cover grayscale transition-[filter,transform] duration-300 group-hover:grayscale-0 group-hover:scale-[1.02]')
           ) : (
             <img
-              src={item.src}
+              src={thumbSrc(item.src)}
               alt={item.title}
               loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover grayscale transition-[filter,transform] duration-300 group-hover:grayscale-0 group-hover:scale-[1.02]"
             />
           )}

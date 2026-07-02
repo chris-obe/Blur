@@ -1,6 +1,7 @@
 import { LogIn, LogOut, Settings, User, UserPlus } from 'lucide-react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useNavigate } from 'react-router-dom';
+import { clearCachedAccountImages } from '../../lib/accountImageCache';
 import { Dropdown, DropdownItem } from '../ui/Dropdown';
 
 export function UserMenu() {
@@ -16,7 +17,12 @@ export function UserMenu() {
       appState: { returnTo: window.location.pathname },
       authorizationParams: { screen_hint: 'signup' },
     });
-  const signOut = () => logout({ logoutParams: { returnTo: window.location.origin } });
+  // Auth0 logout is a full-page redirect, so owner-change cache hooks never
+  // fire — purge the persisted private-image cache before leaving.
+  const signOut = async () => {
+    await clearCachedAccountImages().catch(() => undefined);
+    await logout({ logoutParams: { returnTo: window.location.origin } });
+  };
 
   return (
     <Dropdown

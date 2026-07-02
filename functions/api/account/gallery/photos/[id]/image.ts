@@ -1,5 +1,5 @@
 import { adminAuthError, requireAuth0User } from '../../../../../_lib/admin';
-import { imageResponse, json, type GalleryEnv, type GalleryRow } from '../../../../../_lib/gallery';
+import { imageResponse, imageSizeFromRequest, json, type GalleryEnv, type GalleryRow } from '../../../../../_lib/gallery';
 
 type Env = GalleryEnv & {
   AUTH0_AUDIENCE?: string;
@@ -13,7 +13,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request })
       .bind(String(params.id), identity.sub)
       .first<GalleryRow>();
     if (!row) return json({ error: 'image not found' }, { status: 404 });
-    return imageResponse(env, row);
+    return imageResponse(env, row, { size: imageSizeFromRequest(request) });
   } catch (error) {
     return adminAuthError(error);
   }

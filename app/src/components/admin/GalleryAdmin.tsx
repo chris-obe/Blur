@@ -534,6 +534,7 @@ function uploadFormFromQueueItem(item: UploadQueueItem): FormData {
   const { row, processedImage, suggestion } = item;
   const form = new FormData();
   form.set('file', processedImage.file);
+  if (processedImage.thumbFile) form.set('thumb', processedImage.thumbFile);
   form.set('title', row.title);
   form.set('author', row.author);
   form.set('camera', row.camera);

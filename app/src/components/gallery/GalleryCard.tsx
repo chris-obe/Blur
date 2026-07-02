@@ -1,5 +1,6 @@
 import type { GalleryItem } from '../../lib/types';
 import { formatLabel } from '../../lib/categories';
+import { thumbSrc } from '../../lib/imageSrc';
 import { ReactionBar } from '../ui/ReactionBar';
 
 interface Props {
@@ -21,9 +22,10 @@ export function GalleryCard({ item, onSelect, hidden, enableReactions = true, re
           style={{ opacity: hidden ? 0 : 1 }}
         >
           <img
-            src={item.src}
+            src={thumbSrc(item.src)}
             alt={item.title}
             loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover grayscale transition-[filter,transform] duration-300 group-hover:grayscale-0 group-hover:scale-[1.02]"
           />
         </div>

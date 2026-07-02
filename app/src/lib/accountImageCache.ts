@@ -151,6 +151,25 @@ export function useCachedAccountImage(
   return src;
 }
 
+// Batch fetches run through a small worker pool: an unbounded Promise.all
+// would fire one authenticated request per photo simultaneously (hundreds on
+// large accounts) and starve the page's real traffic.
+const BATCH_FETCH_CONCURRENCY = 8;
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export function useCachedAccountImageUrls(
   photos: AccountImagePhoto[],
   accessToken: string | null,
@@ -162,10 +181,10 @@ export function useCachedAccountImageUrls(
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const entries = await Promise.all(photos.map(async (photo) => {
+      const entries = await mapWithConcurrency(photos, BATCH_FETCH_CONCURRENCY, async (photo) => {
         const url = await cachedAccountImageUrl(photo, accessToken, ownerKey);
-        return url ? [photo.id, url] as const : null;
-      }));
+        return url ? ([photo.id, url] as const) : null;
+      });
       if (!cancelled) setUrls(Object.fromEntries(entries.filter((entry): entry is readonly [string, string] => !!entry)));
     };
     void load();

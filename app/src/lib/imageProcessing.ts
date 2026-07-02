@@ -1,5 +1,7 @@
 export const GALLERY_UPLOAD_MAX_BYTES = 1024 * 1024;
 export const GALLERY_UPLOAD_MAX_LONG_EDGE = 2048;
+export const GALLERY_THUMB_LONG_EDGE = 512;
+export const GALLERY_THUMB_MAX_BYTES = 256 * 1024;
 
 export type ImageProcessingStage = 'idle' | 'decoding' | 'resizing' | 'compressing' | 'ready' | 'uploading';
 
@@ -11,6 +13,8 @@ export interface ImageProcessingProgress {
 
 export interface ProcessedImage {
   file: File;
+  /** ~512px grid variant generated from the same source bitmap */
+  thumbFile: File | null;
   width: number;
   height: number;
   originalBytes: number;
@@ -44,9 +48,11 @@ export async function processGalleryUploadImage(
           type: encoded.blob.type,
           lastModified: Date.now(),
         });
+        const thumbFile = await encodeThumb(bitmap, file.name);
         progress(onProgress, 'ready', 'Ready to upload', 100);
         return {
           file: processedFile,
+          thumbFile,
           width,
           height,
           originalBytes: file.size,
@@ -133,6 +139,23 @@ function encodeWithType(canvas: HTMLCanvasElement, type: string, quality: number
       quality,
     );
   });
+}
+
+// Grid thumbnail from the same decoded bitmap. Best-effort: a photo without a
+// thumb still uploads fine (grids fall back to the full image server-side).
+async function encodeThumb(bitmap: ImageBitmap, sourceName: string): Promise<File | null> {
+  try {
+    const { canvas } = drawToCanvas(bitmap, GALLERY_THUMB_LONG_EDGE);
+    let blob = await encodeWithType(canvas, 'image/webp', 0.8);
+    if (blob.type !== 'image/webp') blob = await encodeWithType(canvas, 'image/jpeg', 0.8);
+    if (blob.size > GALLERY_THUMB_MAX_BYTES) blob = await encodeWithType(canvas, blob.type, 0.6);
+    if (blob.size > GALLERY_THUMB_MAX_BYTES) return null;
+    const extension = blob.type === 'image/webp' ? 'webp' : 'jpg';
+    const base = sourceName.replace(/\.[^.]+$/, '') || 'gallery-upload';
+    return new File([blob], `${base}.thumb.${extension}`, { type: blob.type, lastModified: Date.now() });
+  } catch {
+    return null;
+  }
 }
 
 function replaceExtension(name: string, extension: string): string {

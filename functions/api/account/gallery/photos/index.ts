@@ -90,14 +90,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
     httpMetadata: { contentType: file.type || 'application/octet-stream' },
     customMetadata: { title, uploadedAt: now, ownerSub: identity.sub },
   });
+  const thumbObjectKey = await storeThumb(env, form, objectKey);
 
   await env.GALLERY_DB.prepare(
     `INSERT INTO gallery_photos (
-      id, title, author, status, gallery_status, gallery_status_review_required, object_key, content_type, width, height,
+      id, title, author, status, gallery_status, gallery_status_review_required, object_key, thumb_object_key, content_type, width, height,
       format_id, camera, camera_catalog_id, lens, lens_catalog_id, focal, aperture,
       subject_preset, subject_width_m, shutter_speed, iso, captured_at,
       tags_json, metadata_source_json, submitted_by, notes, created_at, updated_at, published_at
-    ) VALUES (?, ?, ?, ?, 'not_submitted', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    ) VALUES (?, ?, ?, ?, 'not_submitted', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
   )
     .bind(
       id,
@@ -105,6 +106,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
       String(form.get('author') ?? '').trim(),
       legacyStatusFromGalleryStatus('not_submitted'),
       objectKey,
+      thumbObjectKey,
       file.type || 'application/octet-stream',
       numberOrNull(form.get('width')),
       numberOrNull(form.get('height')),
@@ -132,6 +134,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   const row = await findPhoto(env, id);
   return json({ photo: row ? photoFromRow(row, true) : null }, { status: 201 });
 };
+
+// Store the optional client-generated grid thumbnail next to the original.
+// Best-effort: absent/oversized thumbs are ignored and grids serve full images.
+const MAX_THUMB_BYTES = 256 * 1024;
+
+async function storeThumb(env: Env, form: FormData, objectKey: string): Promise<string | null> {
+  const thumb = form.get('thumb');
+  if (!(thumb instanceof File) || thumb.size === 0 || thumb.size > MAX_THUMB_BYTES) return null;
+  const thumbObjectKey = `${objectKey}.thumb`;
+  await env.GALLERY_BUCKET.put(thumbObjectKey, thumb.stream(), {
+    httpMetadata: { contentType: thumb.type || 'image/webp' },
+  });
+  return thumbObjectKey;
+}
 
 function numberOrNull(value: FormDataEntryValue | null) {
   if (value == null || value === '') return null;

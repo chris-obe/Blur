@@ -21,6 +21,7 @@ export interface GalleryRow {
   gallery_status?: string | null;
   gallery_status_review_required?: number | null;
   object_key: string;
+  thumb_object_key?: string | null;
   content_type: string;
   width: number | null;
   height: number | null;
@@ -126,18 +127,33 @@ export async function findPhoto(env: GalleryEnv, id: string): Promise<GalleryRow
   return env.GALLERY_DB.prepare('SELECT * FROM gallery_photos WHERE id = ?').bind(id).first<GalleryRow>();
 }
 
+export function imageSizeFromRequest(request: Request): 'thumb' | 'full' {
+  return new URL(request.url).searchParams.get('size') === 'thumb' ? 'thumb' : 'full';
+}
+
 export async function imageResponse(
   env: GalleryEnv,
   row: GalleryRow,
-  options: { publicCache?: boolean; forceNoStore?: boolean } = {},
+  options: { publicCache?: boolean; forceNoStore?: boolean; size?: 'thumb' | 'full' } = {},
 ) {
-  const object = await env.GALLERY_BUCKET.get(row.object_key);
+  // Grids ask for ?size=thumb; legacy rows without a thumb serve the full image.
+  const useThumb = options.size === 'thumb' && !!row.thumb_object_key;
+  const object = await env.GALLERY_BUCKET.get(useThumb ? (row.thumb_object_key as string) : row.object_key);
   if (!object) return json({ error: 'image not found' }, { status: 404 });
 
   const headers = new Headers();
-  headers.set('content-type', row.content_type || object.httpMetadata?.contentType || 'application/octet-stream');
+  headers.set(
+    'content-type',
+    (useThumb ? object.httpMetadata?.contentType : row.content_type || object.httpMetadata?.contentType) || 'application/octet-stream',
+  );
   const publiclyCacheable = options.publicCache || galleryStatusFromRow(row) === 'approved';
-  headers.set('cache-control', options.forceNoStore ? 'no-store' : publiclyCacheable ? 'public, max-age=300' : 'no-store');
+  // Approved image bytes effectively never change for a given photo id (there
+  // is no replace-image path), so cache a day with a week of ETag-revalidated
+  // staleness instead of re-fetching every 5 minutes.
+  headers.set(
+    'cache-control',
+    options.forceNoStore ? 'no-store' : publiclyCacheable ? 'public, max-age=86400, stale-while-revalidate=604800' : 'no-store',
+  );
   if (object.httpEtag) headers.set('etag', object.httpEtag);
 
   return new Response(object.body, { headers });
