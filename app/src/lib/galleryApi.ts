@@ -1,9 +1,35 @@
 import type { GalleryItem } from './types';
 import type { Reaction, ReactionCounts } from './reactions';
+import type {
+  EmbedAlbumLayout,
+  EmbedTemplate,
+  GalleryAlbumPhotoVisibility,
+  GalleryAlbumStatus,
+} from '@shared/embed';
+
+// Embed template + album status types are the shared contract in shared/embed.ts
+// (the backend compiles against the same file). Re-exported so existing
+// `from './galleryApi'` imports keep working.
+export type {
+  EmbedAlbumLayout,
+  EmbedDensity,
+  EmbedFieldId,
+  EmbedFrameColor,
+  EmbedFrameStyle,
+  EmbedGalleryModeTemplate,
+  EmbedImageFit,
+  EmbedImagePosition,
+  EmbedMetadataPlacement,
+  EmbedModeTemplate,
+  EmbedOpenButtonPlacement,
+  EmbedTemplate,
+  EmbedTheme,
+  GalleryAlbumPhotoVisibility,
+  GalleryAlbumStatus,
+} from '@shared/embed';
 
 export type GalleryStatus = 'draft' | 'pending' | 'approved' | 'rejected';
 export type GalleryModerationStatus = 'not_submitted' | 'pending' | 'approved' | 'rejected';
-export type GalleryAlbumPhotoVisibility = 'visible' | 'hidden';
 
 export interface AdminGalleryPhoto extends GalleryItem {
   status: GalleryStatus;
@@ -28,83 +54,6 @@ export interface GalleryAlbumPhoto extends GalleryItem {
   caption?: string;
   visibility: GalleryAlbumPhotoVisibility;
   sortOrder: number;
-}
-
-export type GalleryAlbumStatus = 'draft' | 'published';
-export type EmbedTheme = 'light' | 'dark' | 'system';
-export type EmbedDensity = 'compact' | 'comfortable';
-export type EmbedFrameStyle = 'minimal' | 'technical' | 'editorial';
-export type EmbedImageFit = 'cover' | 'contain';
-export type EmbedImagePosition = 'auto' | 'center' | 'top' | 'bottom';
-export type EmbedMetadataPlacement = 'bottom' | 'left' | 'right';
-export type EmbedAlbumLayout = 'grid' | 'carousel';
-export type EmbedOpenButtonPlacement = 'metadata' | 'below' | 'top-right';
-export type EmbedFrameColor = 'black' | 'white' | 'mono' | 'blue' | 'green' | 'amber' | 'rose' | 'violet' | 'teal';
-
-export type EmbedFieldId =
-  | 'camera'
-  | 'lens'
-  | 'focal'
-  | 'aperture'
-  | 'shutter'
-  | 'iso'
-  | 'capturedAt'
-  | 'format'
-  | 'subject';
-
-export interface EmbedTemplate {
-  theme: EmbedTheme;
-  density: EmbedDensity;
-  frameStyle: EmbedFrameStyle;
-  imageFit: EmbedImageFit;
-  imagePosition: EmbedImagePosition;
-  frameWidth: number;
-  frameColor: EmbedFrameColor;
-  squareImages: boolean;
-  maxLongEdge: number;
-  metadataPlacement: EmbedMetadataPlacement;
-  showMetadata: boolean;
-  defaultTargetFormatId: string;
-  visibleFields: EmbedFieldId[];
-  ctaLabel: string;
-  showOpenButton: boolean;
-  openButtonPlacement: EmbedOpenButtonPlacement;
-  showEquivalent: boolean;
-  albumLayout: EmbedAlbumLayout;
-  albumCount: number;
-  albumColumns: number;
-  showAlbumHeader: boolean;
-  showCarouselControls: boolean;
-  image: EmbedModeTemplate;
-  gallery: EmbedGalleryModeTemplate;
-}
-
-export interface EmbedModeTemplate {
-  theme: EmbedTheme;
-  density: EmbedDensity;
-  frameStyle: EmbedFrameStyle;
-  imageFit: EmbedImageFit;
-  imagePosition: EmbedImagePosition;
-  frameWidth: number;
-  frameColor: EmbedFrameColor;
-  squareImages: boolean;
-  maxLongEdge: number;
-  metadataPlacement: EmbedMetadataPlacement;
-  showMetadata: boolean;
-  defaultTargetFormatId: string;
-  visibleFields: EmbedFieldId[];
-  ctaLabel: string;
-  showOpenButton: boolean;
-  openButtonPlacement: EmbedOpenButtonPlacement;
-  showEquivalent: boolean;
-}
-
-export interface EmbedGalleryModeTemplate extends EmbedModeTemplate {
-  albumLayout: EmbedAlbumLayout;
-  albumCount: number;
-  albumColumns: number;
-  showAlbumHeader: boolean;
-  showCarouselControls: boolean;
 }
 
 export interface GalleryAlbum {

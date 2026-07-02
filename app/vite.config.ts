@@ -265,6 +265,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@engine': resolve(__dirname, '../engine/index.js'),
+      '@shared': resolve(__dirname, '../shared'),
       '@': resolve(__dirname, 'src'),
     },
   },

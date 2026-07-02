@@ -1,5 +1,9 @@
 import type { EmbedFieldId, EmbedGalleryModeTemplate, EmbedModeTemplate, EmbedTemplate } from './galleryApi';
 
+// The default template is defined once in the shared contract; both the
+// backend normalizer and this UI module use the identical object.
+export { DEFAULT_EMBED_TEMPLATE } from '@shared/embed';
+
 export const EMBED_FRAME_COLOR_OPTIONS = [
   { id: 'black', label: 'Black', value: '#1f1a15' },
   { id: 'white', label: 'White', value: '#f5f0e7' },
@@ -39,74 +43,6 @@ export const EMBED_SIZE_PRESETS = [
 export const DEFAULT_EMBED_MAX_LONG_EDGE = 960;
 export const MIN_EMBED_LONG_EDGE = 320;
 export const MAX_EMBED_LONG_EDGE = 1600;
-
-export const DEFAULT_EMBED_TEMPLATE: EmbedTemplate = {
-  theme: 'light',
-  density: 'comfortable',
-  frameStyle: 'minimal',
-  imageFit: 'contain',
-  imagePosition: 'auto',
-  frameWidth: 10,
-  frameColor: 'black',
-  squareImages: false,
-  maxLongEdge: DEFAULT_EMBED_MAX_LONG_EDGE,
-  metadataPlacement: 'bottom',
-  showMetadata: true,
-  defaultTargetFormatId: 'ff',
-  visibleFields: ['camera', 'lens', 'focal', 'aperture', 'format', 'capturedAt'],
-  ctaLabel: 'Open in blur',
-  showOpenButton: true,
-  openButtonPlacement: 'metadata',
-  showEquivalent: false,
-  albumLayout: 'grid',
-  albumCount: 6,
-  albumColumns: 3,
-  showAlbumHeader: true,
-  showCarouselControls: true,
-  image: {
-    theme: 'light',
-    density: 'comfortable',
-    frameStyle: 'minimal',
-    imageFit: 'contain',
-    imagePosition: 'auto',
-    frameWidth: 10,
-    frameColor: 'black',
-    squareImages: false,
-    maxLongEdge: DEFAULT_EMBED_MAX_LONG_EDGE,
-    metadataPlacement: 'bottom',
-    showMetadata: true,
-    defaultTargetFormatId: 'ff',
-    visibleFields: ['camera', 'lens', 'focal', 'aperture', 'format', 'capturedAt'],
-    ctaLabel: 'Open in blur',
-    showOpenButton: true,
-    openButtonPlacement: 'metadata',
-    showEquivalent: false,
-  },
-  gallery: {
-    theme: 'light',
-    density: 'compact',
-    frameStyle: 'minimal',
-    imageFit: 'cover',
-    imagePosition: 'auto',
-    frameWidth: 10,
-    frameColor: 'black',
-    squareImages: false,
-    maxLongEdge: DEFAULT_EMBED_MAX_LONG_EDGE,
-    metadataPlacement: 'bottom',
-    showMetadata: false,
-    defaultTargetFormatId: 'ff',
-    visibleFields: ['camera', 'lens', 'focal', 'aperture'],
-    ctaLabel: 'Open in blur',
-    showOpenButton: true,
-    openButtonPlacement: 'below',
-    showEquivalent: false,
-    albumLayout: 'grid',
-    albumCount: 9,
-    albumColumns: 3,
-    showAlbumHeader: true,
-    showCarouselControls: true,
-  },
-};
 
 export function templateForMode(template: EmbedTemplate, mode: 'image'): EmbedModeTemplate;
 export function templateForMode(template: EmbedTemplate, mode: 'gallery'): EmbedGalleryModeTemplate;
