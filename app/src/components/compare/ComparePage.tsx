@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DEFAULT_BACKGROUND_DISTANCE_RANGE, type BackgroundDistanceRange } from '../../lib/compareDistanceRange';
+import { backgroundDistanceRangeForSubjectWidth, type BackgroundDistanceRange } from '../../lib/compareDistanceRange';
 import { useCompare } from '../../store/CompareProvider';
 import { BlurChart } from './BlurChart';
 import { SubjectControl } from './SubjectControl';
@@ -10,7 +10,8 @@ import { CompareGalleryExamples, CompareGalleryExamplesToggle } from './CompareG
 export function ComparePage() {
   const { systems, subjectWidthM, setSubjectWidthM, focusOverrideM, setFocusOverrideM } = useCompare();
   const [examplesOpen, setExamplesOpen] = useState(false);
-  const [backgroundRange, setBackgroundRange] = useState<BackgroundDistanceRange>(DEFAULT_BACKGROUND_DISTANCE_RANGE);
+  const [customBackgroundRange, setCustomBackgroundRange] = useState<BackgroundDistanceRange | null>(null);
+  const backgroundRange = customBackgroundRange ?? backgroundDistanceRangeForSubjectWidth(subjectWidthM);
 
   return (
     <div className="flex min-h-full flex-col lg:h-full lg:flex-row">
@@ -35,7 +36,8 @@ export function ComparePage() {
               focusM={focusOverrideM}
               onFocusChange={setFocusOverrideM}
               backgroundRange={backgroundRange}
-              onBackgroundRangeChange={setBackgroundRange}
+              onBackgroundRangeChange={setCustomBackgroundRange}
+              onBackgroundRangeReset={() => setCustomBackgroundRange(null)}
             />
           </div>
           <CompareGalleryExamplesToggle open={examplesOpen} onToggle={() => setExamplesOpen((current) => !current)} />

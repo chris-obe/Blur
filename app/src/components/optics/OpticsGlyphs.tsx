@@ -30,7 +30,7 @@ export const COMPARE_DEPTH_BANDS: CompareDepthBand[] = [
   { id: 'small-room', label: 'Small room', shortLabel: 'Room', fromM: 0.1, toM: 5, opacity: 0.055 },
   { id: 'large-room', label: 'Large room', shortLabel: 'Hall', fromM: 5, toM: 20, opacity: 0.035 },
   { id: 'garden-street', label: 'Garden / street', shortLabel: 'Trees', fromM: 20, toM: 40, opacity: 0.055 },
-  { id: 'open-distance', label: 'Open distance', shortLabel: 'Open', fromM: 40, toM: 200, opacity: 0.035 },
+  { id: 'open-distance', label: 'Open distance', shortLabel: 'Open', fromM: 40, toM: 1000, opacity: 0.035 },
 ];
 
 const DEPTH_BAND_ICONS: Record<CompareDepthBandId, LucideIcon> = {

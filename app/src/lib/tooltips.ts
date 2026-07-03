@@ -3,7 +3,7 @@ export const UI_TOOLTIPS = {
   comparePositionMode: 'Match framing lets each system stand where it needs to. Fixed position uses one camera-to-subject distance for every system.',
   compareFixedDistance: 'Camera-to-subject distance used only in Fixed position mode.',
   compareStandSummary: 'In Match framing, each system moves closer or farther away until the subject takes up the same space in the frame.',
-  compareBgAxisSummary: 'Sets the near and far background distances shown on the x-axis. This is separate from camera-to-subject distance.',
+  compareBgAxisSummary: 'Sets the near and far background distances on the x-axis. Auto follows the framing preset; custom can extend to 1km.',
   compareChartReadout: 'Choose what appears when you hover across a background position on the graph.',
   compareReadoutFixed: 'Summary pins one ranked blur list in the corner while the cursor moves.',
   compareReadoutTracked: 'Follow line moves blur labels beside selected curves as the cursor moves.',

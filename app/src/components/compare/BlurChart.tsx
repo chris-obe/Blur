@@ -9,6 +9,7 @@ import { Check, ChevronDown, Layers, MousePointer2, Ruler } from 'lucide-react';
 import {
   BACKGROUND_DISTANCE_TICKS,
   DEFAULT_BACKGROUND_DISTANCE_RANGE,
+  formatBackgroundDistance,
   normalizeBackgroundDistanceRange,
   type BackgroundDistanceRange,
 } from '../../lib/compareDistanceRange';
@@ -115,7 +116,7 @@ function Inner({
     setCursor(xScale.invert(x));
   };
 
-  const tickFmt = (d: number) => (d >= 1 ? `${d}m` : `${d.toFixed(1)}m`);
+  const tickFmt = formatBackgroundDistance;
   const xTicks = useMemo(
     () =>
       Array.from(

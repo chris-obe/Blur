@@ -4,7 +4,6 @@ import {
   BACKGROUND_DISTANCE_MAX_M,
   BACKGROUND_DISTANCE_MIN_M,
   BACKGROUND_DISTANCE_MIN_RATIO,
-  DEFAULT_BACKGROUND_DISTANCE_RANGE,
   backgroundRangeLabel,
   formatBackgroundDistance,
   normalizeBackgroundDistanceRange,
@@ -23,6 +22,7 @@ interface Props {
   onFocusChange: (m: number | null) => void;
   backgroundRange: BackgroundDistanceRange;
   onBackgroundRangeChange: (range: BackgroundDistanceRange) => void;
+  onBackgroundRangeReset: () => void;
 }
 
 // Focus-distance slider is log-mapped so close distances get fine control.
@@ -45,6 +45,7 @@ export function SubjectControl({
   onFocusChange,
   backgroundRange,
   onBackgroundRangeChange,
+  onBackgroundRangeReset,
 }: Props) {
   const selectedPreset = SUBJECT_DISTANCE_PRESETS.find((preset) => preset.widthM === width);
   const isPreset = selectedPreset != null;
@@ -204,7 +205,11 @@ export function SubjectControl({
           </Tooltip>
         </div>
       )}
-      <BackgroundRangeControl range={backgroundRange} onChange={onBackgroundRangeChange} />
+      <BackgroundRangeControl
+        range={backgroundRange}
+        onChange={onBackgroundRangeChange}
+        onReset={onBackgroundRangeReset}
+      />
     </div>
   );
 }
@@ -212,9 +217,11 @@ export function SubjectControl({
 function BackgroundRangeControl({
   range,
   onChange,
+  onReset,
 }: {
   range: BackgroundDistanceRange;
   onChange: (range: BackgroundDistanceRange) => void;
+  onReset: () => void;
 }) {
   const normalized = normalizeBackgroundDistanceRange(range);
   const setMin = (nextMinM: number) =>
@@ -231,7 +238,6 @@ function BackgroundRangeControl({
         maxM: Math.max(nextMaxM, normalized.minM * BACKGROUND_DISTANCE_MIN_RATIO),
       }),
     );
-  const reset = () => onChange(DEFAULT_BACKGROUND_DISTANCE_RANGE);
 
   return (
     <Dropdown
@@ -257,10 +263,10 @@ function BackgroundRangeControl({
           </div>
           <button
             type="button"
-            onClick={reset}
+            onClick={onReset}
             className="border border-line px-2 py-1 text-[10px] font-bold uppercase tracking-wide hover:border-line-strong"
           >
-            Reset
+            Auto
           </button>
         </div>
         <BackgroundRangeRow
