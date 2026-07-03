@@ -7,6 +7,7 @@ import { subjectPresetById, subjectPresetForWidth, SUBJECT_DISTANCE_PRESETS } fr
 import { systemLabel, systemOpticsLabel, systemSourceLabel, type CompareSystem } from '../../store/CompareProvider';
 import { usePublicGalleryPhotos } from '../../hooks/usePublicGalleryPhotos';
 import { MatchBadge } from '../optics/MatchBadge';
+import { SubjectPresetGlyph } from '../optics/OpticsGlyphs';
 import { Button } from '../ui/Button';
 import { Tooltip } from '../ui/Tooltip';
 import { DashSwatch } from './BlurChart';
@@ -149,7 +150,8 @@ function SubjectPresetRail({ value, onChange }: { value: number; onChange: (widt
             ].join(' ')}
             title={preset.label}
           >
-            <span className="block truncate">{shortPresetLabel(preset.label)}</span>
+            <SubjectPresetGlyph presetId={preset.id} size={14} className="mx-auto" />
+            <span className="sr-only">{shortPresetLabel(preset.label)}</span>
           </button>
         ))}
       </div>

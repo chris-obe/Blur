@@ -1,7 +1,8 @@
-import { Check, ChevronDown, Crosshair, MoveHorizontal, Target, X } from 'lucide-react';
+import { Check, ChevronDown, Crosshair, MoveHorizontal, X } from 'lucide-react';
 import { NumberField } from '../ui/NumberField';
 import { focusDistanceForFraming, getFormat } from '../../lib/engine';
 import { SUBJECT_DISTANCE_PRESETS } from '../../lib/subjectDistance';
+import { CameraToSubjectGlyph, SubjectPresetGlyph } from '../optics/OpticsGlyphs';
 import { Dropdown } from '../ui/Dropdown';
 import { Tooltip } from '../ui/Tooltip';
 
@@ -43,7 +44,7 @@ export function SubjectControl({ width, onChange, focusM, onFocusChange }: Props
         trigger={
           <Tooltip tip="compareFraming" side="bottom" align="start">
             <div className="inline-flex h-9 items-center gap-2 border border-line px-2.5 text-xs transition-colors hover:border-line-strong">
-              <Target size={14} strokeWidth={1.6} />
+              <SubjectPresetGlyph presetId={selectedPreset?.id} size={14} />
               <span className="label">Frame</span>
               <span className="font-bold">{selectedPreset?.label ?? `${fmtDist(width)} wide`}</span>
               <ChevronDown size={13} strokeWidth={1.6} className="text-muted" />
@@ -67,6 +68,7 @@ export function SubjectControl({ width, onChange, focusM, onFocusChange }: Props
                 <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
                   {!manual && width === preset.widthM && <Check size={12} strokeWidth={2.4} />}
                 </span>
+                <SubjectPresetGlyph presetId={preset.id} size={14} className="shrink-0 text-muted" />
                 <span className="min-w-0 flex-1 truncate">{preset.label}</span>
                 <span className="text-muted tabular-nums">{fmtDist(preset.widthM)} wide</span>
               </button>
@@ -173,9 +175,8 @@ export function SubjectControl({ width, onChange, focusM, onFocusChange }: Props
       ) : (
         <div className="flex h-9 min-w-0 flex-1 items-center gap-3 overflow-hidden border border-line px-2.5 text-xs">
           <Tooltip tip="compareStandSummary" side="bottom" align="start">
-            <span className="min-w-0 truncate">
-              <span className="label mr-1">Stand</span>
-              <span className="font-bold">per system</span>
+            <span className="min-w-0 truncate text-muted">
+              <CameraToSubjectGlyph presetId={selectedPreset?.id} distanceLabel="per system" />
             </span>
           </Tooltip>
           <Tooltip tip="compareBgAxisSummary" side="bottom" align="start">

@@ -8,8 +8,17 @@ import { ParentSize } from '@visx/responsive';
 import { Check, ChevronDown, Layers, MousePointer2, Ruler } from 'lucide-react';
 import { compareLineColor, compareLineStyle } from '../../lib/compareStyles';
 import { blurFraction, fieldOfView, focusDistanceForFraming } from '../../lib/engine';
+import { subjectPresetForWidth, type SubjectDistancePresetId } from '../../lib/subjectDistance';
 import { systemLabel, systemOpticsLabel, systemSourceLabel, type CompareSystem } from '../../store/CompareProvider';
 import type { TooltipKey } from '../../lib/tooltips';
+import {
+  BackgroundDistanceGlyph,
+  CameraToSubjectGlyph,
+  COMPARE_DEPTH_BANDS,
+  DepthBandGlyph,
+  LensOriginGlyph,
+  depthBandForDistance,
+} from '../optics/OpticsGlyphs';
 import { Dropdown } from '../ui/Dropdown';
 import { Tooltip } from '../ui/Tooltip';
 
@@ -17,14 +26,8 @@ const MARGIN = { top: 14, right: 18, bottom: 34, left: 46 };
 const MIN_BG_BEHIND_M = 0.1;
 const MAX_BG_BEHIND_M = 200;
 type ReadoutMode = 'fixed' | 'tracked';
-
-const DEPTH_BANDS = [
-  { id: 'small-room', label: 'Small room', shortLabel: 'Small room', fromM: 0.1, toM: 5, opacity: 0.055 },
-  { id: 'large-room', label: 'Large room', shortLabel: 'Large room', fromM: 5, toM: 20, opacity: 0.035 },
-  { id: 'garden-street', label: 'Garden / street', shortLabel: 'Garden', fromM: 20, toM: 40, opacity: 0.055 },
-  { id: 'open-distance', label: 'Open distance', shortLabel: 'Open', fromM: 40, toM: 200, opacity: 0.035 },
-] as const;
-const DEPTH_LABEL_MIN_WIDTH = 72;
+const DEPTH_GLYPH_MIN_WIDTH = 24;
+const CURSOR_BADGE_WIDTH = 112;
 
 interface Pt {
   behindM: number;
@@ -64,6 +67,7 @@ function Inner({
   showDepthBands,
   readoutMode,
   trackedSeriesIds,
+  subjectPresetId,
 }: {
   width: number;
   height: number;
@@ -72,6 +76,7 @@ function Inner({
   showDepthBands: boolean;
   readoutMode: ReadoutMode;
   trackedSeriesIds: string[];
+  subjectPresetId: SubjectDistancePresetId | null;
 }) {
   const [cursor, setCursor] = useState<number | null>(null);
   const innerW = Math.max(0, width - MARGIN.left - MARGIN.right);
@@ -131,30 +136,34 @@ function Inner({
   const cursorLabelOnRight =
     cursorPlotX == null ? true : cursorPlotX < 128 ? true : cursorPlotX > innerW - 148 ? false : cursorPlotX > innerW / 2;
   const summaryReadoutTop = showDepthBands ? MARGIN.top + 24 : 8;
+  const cursorBadgeLeft =
+    cursorPlotX == null
+      ? 0
+      : clamp(
+          MARGIN.left + cursorPlotX + (cursorLabelOnRight ? 8 : -CURSOR_BADGE_WIDTH - 8),
+          4,
+          Math.max(4, width - CURSOR_BADGE_WIDTH - 4),
+        );
+  const cursorDepthBand = cursor == null ? null : depthBandForDistance(cursor);
 
   return (
     <div className="relative">
       <svg width={width} height={height} className="touch-none">
         <Group left={MARGIN.left} top={MARGIN.top}>
           {showDepthBands &&
-            DEPTH_BANDS.map((band) => {
+            COMPARE_DEPTH_BANDS.map((band) => {
               const x0 = xScale(Math.max(band.fromM, MIN_BG_BEHIND_M));
               const x1 = xScale(Math.min(band.toM, MAX_BG_BEHIND_M));
               const bandWidth = Math.max(0, x1 - x0);
               return (
                 <g key={band.id} pointerEvents="none">
                   <rect x={x0} y={0} width={bandWidth} height={innerH} fill="var(--fg)" opacity={band.opacity} />
-                  {bandWidth >= DEPTH_LABEL_MIN_WIDTH && (
-                    <text
-                      x={x0 + 8}
-                      y={14}
-                      fill="var(--muted)"
-                      fontSize={10}
-                      fontWeight={700}
-                      letterSpacing={0.2}
-                    >
-                      {band.shortLabel}
-                    </text>
+                  {bandWidth >= DEPTH_GLYPH_MIN_WIDTH && (
+                    <foreignObject x={x0 + 6} y={6} width={18} height={18}>
+                      <div className="flex h-[18px] w-[18px] items-center justify-center text-muted">
+                        <DepthBandGlyph bandId={band.id} size={14} />
+                      </div>
+                    </foreignObject>
                   )}
                 </g>
               );
@@ -177,6 +186,11 @@ function Inner({
             tickFormat={(v) => tickFmt(v as number)}
             tickLabelProps={() => ({ fill: 'var(--muted)', fontSize: 10, dy: 2, textAnchor: 'middle' })}
           />
+          <foreignObject x={-22} y={innerH + 7} width={18} height={18} pointerEvents="none">
+            <div className="flex h-[18px] w-[18px] items-center justify-center text-muted">
+              <LensOriginGlyph size={14} />
+            </div>
+          </foreignObject>
 
           {series.map((s) => (
             <LinePath
@@ -201,18 +215,6 @@ function Inner({
                 strokeDasharray="2,3"
                 pointerEvents="none"
               />
-              <text
-                x={xScale(cursor) + (cursorLabelOnRight ? 8 : -8)}
-                y={-3}
-                fill="var(--fg)"
-                fontSize={10}
-                fontWeight={700}
-                letterSpacing={0.2}
-                textAnchor={cursorLabelOnRight ? 'start' : 'end'}
-                pointerEvents="none"
-              >
-                background position
-              </text>
               {series.map((s) => {
                 const v = blurAt(s.points, cursor);
                 if (v == null) return null;
@@ -245,6 +247,15 @@ function Inner({
         </Group>
       </svg>
 
+      {cursor != null && cursorDepthBand != null && (
+        <div
+          className="pointer-events-none absolute z-10 flex h-6 items-center border border-line bg-bg/95 px-1.5 text-[10px] text-fg"
+          style={{ left: cursorBadgeLeft, top: 2, width: CURSOR_BADGE_WIDTH }}
+        >
+          <BackgroundDistanceGlyph bandId={cursorDepthBand.id} distanceLabel={formatSignedMeters(cursor)} />
+        </div>
+      )}
+
       {/* ranked readout */}
       {readoutMode === 'fixed' && (
         <div
@@ -256,7 +267,6 @@ function Inner({
         >
           {cursor != null ? (
             <>
-              <div className="label">background +{formatDistance(cursor)} behind subject</div>
               {[...series]
                 .map((s) => ({ s, v: blurAt(s.points, cursor) }))
                 .filter((r) => r.v != null)
@@ -267,10 +277,18 @@ function Inner({
                     <span className="tabular-nums font-bold">{(v as number).toFixed(1)}%</span>
                     <span className="min-w-0 truncate text-muted">
                       {s.optionLabel} · {s.sourceLabel}
-                      {showContext
-                        ? ` · stand ${formatDistance(s.focusM)} · camera to bg ≈ ${formatDistance(s.focusM + cursor)} · ${Math.round(s.fovH)}° FOV`
-                        : ''}
                     </span>
+                    {showContext && (
+                      <>
+                        <span className="text-muted">·</span>
+                        <CameraToSubjectGlyph
+                          presetId={subjectPresetId}
+                          distanceLabel={formatDistance(s.focusM)}
+                          className="shrink-0 text-muted"
+                        />
+                        <span className="label shrink-0">{Math.round(s.fovH)}° FOV</span>
+                      </>
+                    )}
                   </div>
                 ))}
             </>
@@ -283,7 +301,12 @@ function Inner({
       {readoutMode === 'tracked' && cursor != null && (
         <>
           {trackedReadouts.map((readout) => (
-            <TrackedReadout key={readout.series.id} readout={readout} showContext={showContext} />
+            <TrackedReadout
+              key={readout.series.id}
+              readout={readout}
+              showContext={showContext}
+              subjectPresetId={subjectPresetId}
+            />
           ))}
         </>
       )}
@@ -297,7 +320,11 @@ function Inner({
           {series.map((s) => (
             <div key={s.id} className="flex max-w-full items-center gap-2 border border-line bg-bg/90 px-2 py-1 text-xs">
               <DashSwatch color={s.stroke} dash={s.dash} />
-              <span className="truncate font-bold">{formatDistance(s.focusM)}</span>
+              <CameraToSubjectGlyph
+                presetId={subjectPresetId}
+                distanceLabel={formatDistance(s.focusM)}
+                className="min-w-0 text-muted"
+              />
               <span className="label shrink-0">{Math.round(s.fovH)}° FOV</span>
             </div>
           ))}
@@ -372,24 +399,37 @@ function layoutTrackedReadouts(
   return positioned.sort((a, b) => a.order - b.order);
 }
 
-function TrackedReadout({ readout, showContext }: { readout: TrackedReadoutLayout; showContext: boolean }) {
-  const { series, blurPct, behindM, left, top, width } = readout;
+function TrackedReadout({
+  readout,
+  showContext,
+  subjectPresetId,
+}: {
+  readout: TrackedReadoutLayout;
+  showContext: boolean;
+  subjectPresetId: SubjectDistancePresetId | null;
+}) {
+  const { series, blurPct, left, top, width } = readout;
 
   return (
     <div
       className="pointer-events-none absolute z-10 border border-line bg-bg/95 px-3 py-2 text-xs shadow-none"
       style={{ left, top, width }}
     >
-      <div className="label mb-1">background +{formatDistance(behindM)} behind subject</div>
       <div className="flex items-center gap-2">
         <DashSwatch color={series.stroke} dash={series.dash} />
         <span className="text-base font-bold tabular-nums">{blurPct.toFixed(1)}%</span>
         <span className="min-w-0 truncate text-muted">{series.optionLabel}</span>
       </div>
       {showContext && (
-        <div className="label mt-2 truncate">
-          {series.sourceLabel} · stand {formatDistance(series.focusM)} · camera to bg ≈{' '}
-          {formatDistance(series.focusM + behindM)} · {Math.round(series.fovH)}° FOV
+        <div className="mt-2 flex items-center gap-1.5 text-muted">
+          <span className="min-w-0 truncate">{series.sourceLabel}</span>
+          <span className="shrink-0">·</span>
+          <CameraToSubjectGlyph
+            presetId={subjectPresetId}
+            distanceLabel={formatDistance(series.focusM)}
+            className="shrink-0"
+          />
+          <span className="label shrink-0">{Math.round(series.fovH)}° FOV</span>
         </div>
       )}
     </div>
@@ -453,6 +493,7 @@ export function BlurChart({
   // recompute (~200 pts × N systems) off the interaction's critical path.
   const deferredSubjectWidthM = useDeferredValue(subjectWidthM);
   const deferredFocusOverrideM = useDeferredValue(focusOverrideM);
+  const subjectPresetId = subjectPresetForWidth(deferredSubjectWidthM)?.id ?? null;
   const series: Series[] = useMemo(
     () =>
       systems.map((s, index) => {
@@ -531,6 +572,7 @@ export function BlurChart({
                 showDepthBands={showDepthBands}
                 readoutMode={readoutMode}
                 trackedSeriesIds={activeTrackedSeriesIds}
+                subjectPresetId={subjectPresetId}
               />
             )}
           </ParentSize>
@@ -735,6 +777,12 @@ function formatDistance(distanceM: number): string {
   if (distanceM < 1) return `${Math.round(distanceM * 100)}cm`;
   if (distanceM < 10) return `${distanceM.toFixed(1)}m`;
   return `${Math.round(distanceM)}m`;
+}
+
+function formatSignedMeters(distanceM: number): string {
+  if (distanceM < 1) return `+${distanceM.toFixed(2)}m`;
+  if (distanceM < 10) return `+${distanceM.toFixed(1)}m`;
+  return `+${Math.round(distanceM)}m`;
 }
 
 function clamp(value: number, min: number, max: number): number {
