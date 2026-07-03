@@ -1,5 +1,10 @@
 # Agent Guidance
 
+Domain vocabulary lives in `CONTEXT.md`; architecture decisions live in
+`docs/adr/` (one decision per file). Read those before proposing structural
+changes — several "obvious fixes" (e.g. filtering album photos by gallery
+moderation status) are recorded decisions, not bugs.
+
 ## Deployment
 
 - Use `blur` as the visible product/site name in app chrome and browser titles; do not reintroduce `howmuchblur` as user-facing branding.
