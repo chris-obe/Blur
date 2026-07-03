@@ -133,18 +133,24 @@ function Inner({
           showContext,
         );
   const cursorPlotX = cursor == null ? null : xScale(cursor);
-  const cursorLabelOnRight =
-    cursorPlotX == null ? true : cursorPlotX < 128 ? true : cursorPlotX > innerW - 148 ? false : cursorPlotX > innerW / 2;
   const summaryReadoutTop = showDepthBands ? MARGIN.top + 24 : 8;
-  const cursorBadgeLeft =
-    cursorPlotX == null
-      ? 0
-      : clamp(
-          MARGIN.left + cursorPlotX + (cursorLabelOnRight ? 8 : -CURSOR_BADGE_WIDTH - 8),
-          4,
-          Math.max(4, width - CURSOR_BADGE_WIDTH - 4),
-        );
   const cursorDepthBand = cursor == null ? null : depthBandForDistance(cursor);
+  const summaryDistanceBadge =
+    cursor == null || cursorPlotX == null || cursorDepthBand == null || readoutMode !== 'fixed'
+      ? null
+      : (() => {
+          let best: { blurPct: number; left: number; top: number } | null = null;
+          for (const item of series) {
+            const blurPct = blurAt(item.points, cursor);
+            if (blurPct == null || (best != null && blurPct <= best.blurPct)) continue;
+            const point = {
+              x: MARGIN.left + cursorPlotX,
+              y: MARGIN.top + yScale(blurPct),
+            };
+            best = { blurPct, ...positionCursorBadge(point, { width, height }) };
+          }
+          return best;
+        })();
 
   return (
     <div className="relative">
@@ -247,10 +253,10 @@ function Inner({
         </Group>
       </svg>
 
-      {cursor != null && cursorDepthBand != null && (
+      {cursor != null && cursorDepthBand != null && summaryDistanceBadge != null && (
         <div
           className="pointer-events-none absolute z-10 flex h-6 items-center border border-line bg-bg/95 px-1.5 text-[10px] text-fg"
-          style={{ left: cursorBadgeLeft, top: 2, width: CURSOR_BADGE_WIDTH }}
+          style={{ left: summaryDistanceBadge.left, top: summaryDistanceBadge.top, width: CURSOR_BADGE_WIDTH }}
         >
           <BackgroundDistanceGlyph bandId={cursorDepthBand.id} distanceLabel={formatSignedMeters(cursor)} />
         </div>
@@ -365,6 +371,17 @@ function preferredTrackedPosition(
   };
 }
 
+function positionCursorBadge(point: { x: number; y: number }, bounds: { width: number; height: number }) {
+  const gap = 10;
+  const h = 24;
+  const left = point.x + gap + CURSOR_BADGE_WIDTH > bounds.width ? point.x - gap - CURSOR_BADGE_WIDTH : point.x + gap;
+  const top = point.y - h / 2 < 8 ? point.y + gap : point.y - h / 2;
+  return {
+    left: clamp(left, 4, Math.max(4, bounds.width - CURSOR_BADGE_WIDTH - 4)),
+    top: clamp(top, 4, Math.max(4, bounds.height - h - 4)),
+  };
+}
+
 function layoutTrackedReadouts(
   inputs: TrackedReadoutInput[],
   bounds: { width: number; height: number },
@@ -408,7 +425,8 @@ function TrackedReadout({
   showContext: boolean;
   subjectPresetId: SubjectDistancePresetId | null;
 }) {
-  const { series, blurPct, left, top, width } = readout;
+  const { series, blurPct, behindM, left, top, width } = readout;
+  const depthBand = depthBandForDistance(behindM);
 
   return (
     <div
@@ -421,8 +439,14 @@ function TrackedReadout({
         <span className="min-w-0 truncate text-muted">{series.optionLabel}</span>
       </div>
       {showContext && (
-        <div className="mt-2 flex items-center gap-1.5 text-muted">
+        <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-muted">
           <span className="min-w-0 truncate">{series.sourceLabel}</span>
+          <span className="shrink-0">·</span>
+          <BackgroundDistanceGlyph
+            bandId={depthBand.id}
+            distanceLabel={formatSignedMeters(behindM)}
+            className="shrink-0"
+          />
           <span className="shrink-0">·</span>
           <CameraToSubjectGlyph
             presetId={subjectPresetId}
