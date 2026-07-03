@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { DEFAULT_BACKGROUND_DISTANCE_RANGE, type BackgroundDistanceRange } from '../../lib/compareDistanceRange';
 import { useCompare } from '../../store/CompareProvider';
 import { BlurChart } from './BlurChart';
 import { SubjectControl } from './SubjectControl';
@@ -9,6 +10,7 @@ import { CompareGalleryExamples, CompareGalleryExamplesToggle } from './CompareG
 export function ComparePage() {
   const { systems, subjectWidthM, setSubjectWidthM, focusOverrideM, setFocusOverrideM } = useCompare();
   const [examplesOpen, setExamplesOpen] = useState(false);
+  const [backgroundRange, setBackgroundRange] = useState<BackgroundDistanceRange>(DEFAULT_BACKGROUND_DISTANCE_RANGE);
 
   return (
     <div className="flex min-h-full flex-col lg:h-full lg:flex-row">
@@ -32,13 +34,20 @@ export function ComparePage() {
               onChange={setSubjectWidthM}
               focusM={focusOverrideM}
               onFocusChange={setFocusOverrideM}
+              backgroundRange={backgroundRange}
+              onBackgroundRangeChange={setBackgroundRange}
             />
           </div>
           <CompareGalleryExamplesToggle open={examplesOpen} onToggle={() => setExamplesOpen((current) => !current)} />
         </div>
 
         <div className="min-h-[60vh] lg:min-h-0 lg:flex-1">
-          <BlurChart systems={systems} subjectWidthM={subjectWidthM} focusOverrideM={focusOverrideM} />
+          <BlurChart
+            systems={systems}
+            subjectWidthM={subjectWidthM}
+            focusOverrideM={focusOverrideM}
+            backgroundRange={backgroundRange}
+          />
         </div>
       </div>
 

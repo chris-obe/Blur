@@ -6,6 +6,12 @@ import { AxisBottom, AxisLeft } from '@visx/axis';
 import { localPoint } from '@visx/event';
 import { ParentSize } from '@visx/responsive';
 import { Check, ChevronDown, Layers, MousePointer2, Ruler } from 'lucide-react';
+import {
+  BACKGROUND_DISTANCE_TICKS,
+  DEFAULT_BACKGROUND_DISTANCE_RANGE,
+  normalizeBackgroundDistanceRange,
+  type BackgroundDistanceRange,
+} from '../../lib/compareDistanceRange';
 import { compareLineColor, compareLineStyle } from '../../lib/compareStyles';
 import { blurFraction, fieldOfView, focusDistanceForFraming } from '../../lib/engine';
 import { subjectPresetForWidth, type SubjectDistancePresetId } from '../../lib/subjectDistance';
@@ -23,8 +29,6 @@ import { Dropdown } from '../ui/Dropdown';
 import { Tooltip } from '../ui/Tooltip';
 
 const MARGIN = { top: 14, right: 18, bottom: 34, left: 46 };
-const MIN_BG_BEHIND_M = 0.1;
-const MAX_BG_BEHIND_M = 200;
 type ReadoutMode = 'fixed' | 'tracked';
 const DEPTH_GLYPH_MIN_WIDTH = 24;
 const CURSOR_BADGE_WIDTH = 112;
@@ -68,6 +72,7 @@ function Inner({
   readoutMode,
   trackedSeriesIds,
   subjectPresetId,
+  backgroundRange,
 }: {
   width: number;
   height: number;
@@ -77,6 +82,7 @@ function Inner({
   readoutMode: ReadoutMode;
   trackedSeriesIds: string[];
   subjectPresetId: SubjectDistancePresetId | null;
+  backgroundRange: BackgroundDistanceRange;
 }) {
   const [cursor, setCursor] = useState<number | null>(null);
   const innerW = Math.max(0, width - MARGIN.left - MARGIN.right);
@@ -93,8 +99,8 @@ function Inner({
   }, [series]);
 
   const xScale = useMemo(
-    () => scaleLog<number>({ domain: [MIN_BG_BEHIND_M, MAX_BG_BEHIND_M], range: [0, innerW], base: 10 }),
-    [innerW],
+    () => scaleLog<number>({ domain: [backgroundRange.minM, backgroundRange.maxM], range: [0, innerW], base: 10 }),
+    [backgroundRange.maxM, backgroundRange.minM, innerW],
   );
   const yScale = useMemo(
     () => scaleLinear<number>({ domain: [0, yMax], range: [innerH, 0] }),
@@ -110,6 +116,17 @@ function Inner({
   };
 
   const tickFmt = (d: number) => (d >= 1 ? `${d}m` : `${d.toFixed(1)}m`);
+  const xTicks = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          backgroundRange.minM,
+          ...BACKGROUND_DISTANCE_TICKS.filter((tick) => tick > backgroundRange.minM && tick < backgroundRange.maxM),
+          backgroundRange.maxM,
+        ]),
+      ).sort((a, b) => a - b),
+    [backgroundRange.maxM, backgroundRange.minM],
+  );
   const trackedReadouts =
     cursor == null
       ? []
@@ -158,8 +175,9 @@ function Inner({
         <Group left={MARGIN.left} top={MARGIN.top}>
           {showDepthBands &&
             COMPARE_DEPTH_BANDS.map((band) => {
-              const x0 = xScale(Math.max(band.fromM, MIN_BG_BEHIND_M));
-              const x1 = xScale(Math.min(band.toM, MAX_BG_BEHIND_M));
+              if (band.toM <= backgroundRange.minM || band.fromM >= backgroundRange.maxM) return null;
+              const x0 = xScale(Math.max(band.fromM, backgroundRange.minM));
+              const x1 = xScale(Math.min(band.toM, backgroundRange.maxM));
               const bandWidth = Math.max(0, x1 - x0);
               return (
                 <g key={band.id} pointerEvents="none">
@@ -186,7 +204,7 @@ function Inner({
           <AxisBottom
             top={innerH}
             scale={xScale}
-            tickValues={[0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200]}
+            tickValues={xTicks}
             stroke="var(--line)"
             tickStroke="var(--line)"
             tickFormat={(v) => tickFmt(v as number)}
@@ -476,9 +494,9 @@ export function DashSwatch({ color = 'var(--fg)', dash = '0' }: { color?: string
   );
 }
 
-function blurBehindSubjectCurve(system: CompareSystem, focusM: number): Pt[] {
-  const logStart = Math.log10(MIN_BG_BEHIND_M);
-  const logEnd = Math.log10(MAX_BG_BEHIND_M);
+function blurBehindSubjectCurve(system: CompareSystem, focusM: number, backgroundRange: BackgroundDistanceRange): Pt[] {
+  const logStart = Math.log10(backgroundRange.minM);
+  const logEnd = Math.log10(backgroundRange.maxM);
   const steps = 200;
   const out: Pt[] = [];
   for (let i = 0; i <= steps; i++) {
@@ -504,10 +522,12 @@ export function BlurChart({
   systems,
   subjectWidthM,
   focusOverrideM,
+  backgroundRange = DEFAULT_BACKGROUND_DISTANCE_RANGE,
 }: {
   systems: CompareSystem[];
   subjectWidthM: number;
   focusOverrideM: number | null;
+  backgroundRange?: BackgroundDistanceRange;
 }) {
   const [showContext, setShowContext] = useState(true);
   const [showDepthBands, setShowDepthBands] = useState(true);
@@ -517,6 +537,11 @@ export function BlurChart({
   // recompute (~200 pts × N systems) off the interaction's critical path.
   const deferredSubjectWidthM = useDeferredValue(subjectWidthM);
   const deferredFocusOverrideM = useDeferredValue(focusOverrideM);
+  const deferredBackgroundRange = useDeferredValue(backgroundRange);
+  const chartBackgroundRange = useMemo(
+    () => normalizeBackgroundDistanceRange(deferredBackgroundRange),
+    [deferredBackgroundRange],
+  );
   const subjectPresetId = subjectPresetForWidth(deferredSubjectWidthM)?.id ?? null;
   const series: Series[] = useMemo(
     () =>
@@ -533,10 +558,10 @@ export function BlurChart({
           dash: style.dash,
           focusM,
           fovH: fieldOfView(s.focal, s.format).h,
-          points: blurBehindSubjectCurve(s, focusM),
+          points: blurBehindSubjectCurve(s, focusM, chartBackgroundRange),
         };
       }),
-    [systems, deferredSubjectWidthM, deferredFocusOverrideM],
+    [systems, deferredSubjectWidthM, deferredFocusOverrideM, chartBackgroundRange],
   );
   const allSeriesIds = useMemo(() => series.map((item) => item.id), [series]);
   const activeTrackedSeriesIds = useMemo(() => {
@@ -597,6 +622,7 @@ export function BlurChart({
                 readoutMode={readoutMode}
                 trackedSeriesIds={activeTrackedSeriesIds}
                 subjectPresetId={subjectPresetId}
+                backgroundRange={chartBackgroundRange}
               />
             )}
           </ParentSize>

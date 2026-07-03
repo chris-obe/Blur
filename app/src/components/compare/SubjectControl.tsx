@@ -1,5 +1,15 @@
-import { Check, ChevronDown, Crosshair, MoveHorizontal, X } from 'lucide-react';
+import { Check, ChevronDown, Crosshair, MoveHorizontal, SlidersHorizontal, X } from 'lucide-react';
 import { NumberField } from '../ui/NumberField';
+import {
+  BACKGROUND_DISTANCE_MAX_M,
+  BACKGROUND_DISTANCE_MIN_M,
+  BACKGROUND_DISTANCE_MIN_RATIO,
+  DEFAULT_BACKGROUND_DISTANCE_RANGE,
+  backgroundRangeLabel,
+  formatBackgroundDistance,
+  normalizeBackgroundDistanceRange,
+  type BackgroundDistanceRange,
+} from '../../lib/compareDistanceRange';
 import { focusDistanceForFraming, getFormat } from '../../lib/engine';
 import { SUBJECT_DISTANCE_PRESETS } from '../../lib/subjectDistance';
 import { CameraToSubjectGlyph, SubjectPresetGlyph } from '../optics/OpticsGlyphs';
@@ -11,6 +21,8 @@ interface Props {
   onChange: (w: number) => void;
   focusM: number | null;
   onFocusChange: (m: number | null) => void;
+  backgroundRange: BackgroundDistanceRange;
+  onBackgroundRangeChange: (range: BackgroundDistanceRange) => void;
 }
 
 // Focus-distance slider is log-mapped so close distances get fine control.
@@ -21,8 +33,19 @@ const L_MAX = Math.log10(FOCUS_MAX);
 const sliderToDist = (t: number) => 10 ** (L_MIN + (t / 1000) * (L_MAX - L_MIN));
 const distToSlider = (d: number) => Math.round(((Math.log10(d) - L_MIN) / (L_MAX - L_MIN)) * 1000);
 const fmtDist = (d: number) => (d < 10 ? `${d.toFixed(1)} m` : `${Math.round(d)} m`);
+const BG_L_MIN = Math.log10(BACKGROUND_DISTANCE_MIN_M);
+const BG_L_MAX = Math.log10(BACKGROUND_DISTANCE_MAX_M);
+const sliderToBackgroundDist = (t: number) => 10 ** (BG_L_MIN + (t / 1000) * (BG_L_MAX - BG_L_MIN));
+const backgroundDistToSlider = (d: number) => Math.round(((Math.log10(d) - BG_L_MIN) / (BG_L_MAX - BG_L_MIN)) * 1000);
 
-export function SubjectControl({ width, onChange, focusM, onFocusChange }: Props) {
+export function SubjectControl({
+  width,
+  onChange,
+  focusM,
+  onFocusChange,
+  backgroundRange,
+  onBackgroundRangeChange,
+}: Props) {
   const selectedPreset = SUBJECT_DISTANCE_PRESETS.find((preset) => preset.widthM === width);
   const isPreset = selectedPreset != null;
   const manual = focusM != null;
@@ -179,14 +202,109 @@ export function SubjectControl({ width, onChange, focusM, onFocusChange }: Props
               <CameraToSubjectGlyph presetId={selectedPreset?.id} distanceLabel="per system" />
             </span>
           </Tooltip>
-          <Tooltip tip="compareBgAxisSummary" side="bottom" align="start">
-            <span className="hidden min-w-0 truncate md:inline">
-              <span className="label mr-1">BG</span>
-              <span className="font-bold">+0.1-200m</span>
-            </span>
-          </Tooltip>
         </div>
       )}
+      <BackgroundRangeControl range={backgroundRange} onChange={onBackgroundRangeChange} />
     </div>
+  );
+}
+
+function BackgroundRangeControl({
+  range,
+  onChange,
+}: {
+  range: BackgroundDistanceRange;
+  onChange: (range: BackgroundDistanceRange) => void;
+}) {
+  const normalized = normalizeBackgroundDistanceRange(range);
+  const setMin = (nextMinM: number) =>
+    onChange(
+      normalizeBackgroundDistanceRange({
+        minM: Math.min(nextMinM, normalized.maxM / BACKGROUND_DISTANCE_MIN_RATIO),
+        maxM: normalized.maxM,
+      }),
+    );
+  const setMax = (nextMaxM: number) =>
+    onChange(
+      normalizeBackgroundDistanceRange({
+        minM: normalized.minM,
+        maxM: Math.max(nextMaxM, normalized.minM * BACKGROUND_DISTANCE_MIN_RATIO),
+      }),
+    );
+  const reset = () => onChange(DEFAULT_BACKGROUND_DISTANCE_RANGE);
+
+  return (
+    <Dropdown
+      align="right"
+      className="w-80"
+      closeOnClick={false}
+      trigger={
+        <Tooltip tip="compareBgAxisSummary" side="bottom" align="end">
+          <div className="inline-flex h-9 items-center gap-2 border border-line px-2.5 text-xs transition-colors hover:border-line-strong">
+            <SlidersHorizontal size={14} strokeWidth={1.6} />
+            <span className="label">BG</span>
+            <span className="font-bold">{backgroundRangeLabel(normalized)}</span>
+            <ChevronDown size={13} strokeWidth={1.6} className="text-muted" />
+          </div>
+        </Tooltip>
+      }
+    >
+      <div className="space-y-3 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wide">Background range</div>
+            <div className="label mt-1">X-axis behind subject</div>
+          </div>
+          <button
+            type="button"
+            onClick={reset}
+            className="border border-line px-2 py-1 text-[10px] font-bold uppercase tracking-wide hover:border-line-strong"
+          >
+            Reset
+          </button>
+        </div>
+        <BackgroundRangeRow
+          label="Near"
+          valueM={normalized.minM}
+          onChange={setMin}
+          ariaLabel="Minimum background distance behind subject"
+        />
+        <BackgroundRangeRow
+          label="Far"
+          valueM={normalized.maxM}
+          onChange={setMax}
+          ariaLabel="Maximum background distance behind subject"
+        />
+      </div>
+    </Dropdown>
+  );
+}
+
+function BackgroundRangeRow({
+  label,
+  valueM,
+  onChange,
+  ariaLabel,
+}: {
+  label: string;
+  valueM: number;
+  onChange: (valueM: number) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <label className="grid grid-cols-[3.5rem_minmax(0,1fr)_4rem] items-center gap-2 text-xs">
+      <span className="label">{label}</span>
+      <input
+        type="range"
+        min={0}
+        max={1000}
+        value={backgroundDistToSlider(valueM)}
+        onChange={(event) => onChange(sliderToBackgroundDist(Number(event.target.value)))}
+        aria-label={ariaLabel}
+        className="h-1 min-w-0 cursor-pointer appearance-none bg-line"
+        style={{ accentColor: 'var(--fg)' }}
+      />
+      <span className="text-right font-bold tabular-nums">{formatBackgroundDistance(valueM)}</span>
+    </label>
   );
 }
