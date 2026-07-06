@@ -8,10 +8,12 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  ChevronRight,
   Check,
   Code2,
   EllipsisVertical,
   Eye,
+  Filter,
   Globe,
   Lock,
   Plus,
@@ -20,7 +22,7 @@ import {
   Square,
   Upload,
 } from 'lucide-react';
-import { categoryForFormat, formatLabel, type CategoryId } from '../../lib/categories';
+import { CATEGORIES, categoryForFormat, formatLabel, type CategoryId } from '../../lib/categories';
 import { thumbSrc } from '../../lib/imageSrc';
 import type { GalleryItem, ViewEntry } from '../../lib/types';
 import { resolveGalleryFormat } from '../../lib/galleryFormat';
@@ -31,6 +33,7 @@ import { PhotoLightbox } from '../lightbox/PhotoLightbox';
 import { LightboxInfo } from './LightboxInfo';
 import { FormatFilter } from './FormatFilter';
 import { TagSearch } from './TagSearch';
+import { Chip } from '../ui/Chip';
 
 export interface GallerySurfaceItem extends GalleryItem {
   visibility?: GalleryAlbumPhotoVisibility;
@@ -71,6 +74,9 @@ export interface GalleryOwnerControls {
   addLabel?: string;
 }
 
+type GalleryFilterMode = 'expanded' | 'compact';
+type CompactFilterCategory = 'format' | 'tag' | 'focal' | 'aperture';
+
 interface Props<T extends GallerySurfaceItem> {
   items: T[];
   title?: string;
@@ -78,6 +84,7 @@ interface Props<T extends GallerySurfaceItem> {
   ownerName?: string;
   protectedLabel?: string;
   enableFilters?: boolean;
+  filterMode?: GalleryFilterMode;
   enableReactions?: boolean;
   uploadSlot?: ReactNode;
   toolbarExtras?: ReactNode;
@@ -139,6 +146,7 @@ export function GallerySurface<T extends GallerySurfaceItem>({
   ownerName,
   protectedLabel,
   enableFilters = true,
+  filterMode = 'expanded',
   enableReactions = true,
   uploadSlot,
   toolbarExtras,
@@ -159,6 +167,8 @@ export function GallerySurface<T extends GallerySurfaceItem>({
 }: Props<T>) {
   const [formats, setFormats] = useState<Set<CategoryId>>(new Set());
   const [tags, setTags] = useState<string[]>([]);
+  const [focals, setFocals] = useState<Set<number>>(new Set());
+  const [apertures, setApertures] = useState<Set<number>>(new Set());
   const [view, setView] = useState<View<T> | null>(null);
   const openedInitialId = useRef<string | null>(null);
   const anchors = useRef(new Map<string, HTMLElement>());
@@ -177,11 +187,15 @@ export function GallerySurface<T extends GallerySurfaceItem>({
         if (!cat || !formats.has(cat)) return false;
       }
       if (tags.length > 0 && !tags.every((tag) => item.tags.includes(tag))) return false;
+      if (focals.size > 0 && !focals.has(Number(item.focal))) return false;
+      if (apertures.size > 0 && !apertures.has(Number(item.aperture))) return false;
       return true;
     });
-  }, [enableFilters, formats, items, tags]);
+  }, [apertures, enableFilters, focals, formats, items, tags]);
 
   const allTags = useMemo(() => [...new Set(items.flatMap((item) => item.tags))].sort(), [items]);
+  const focalOptions = useMemo(() => [...new Set(items.map((item) => Number(item.focal)).filter(Number.isFinite))].sort((a, b) => a - b), [items]);
+  const apertureOptions = useMemo(() => [...new Set(items.map((item) => Number(item.aperture)).filter(Number.isFinite))].sort((a, b) => a - b), [items]);
   const visibleIds = useMemo(() => filtered.map((item) => item.id), [filtered]);
   const selectedCount = selection?.selectedIds.size ?? 0;
   const allSelected = !!selection && visibleIds.length > 0 && visibleIds.every((id) => selection.selectedIds.has(id));
@@ -205,6 +219,22 @@ export function GallerySurface<T extends GallerySurfaceItem>({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+
+  const toggleFocal = (value: number) =>
+    setFocals((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+
+  const toggleAperture = (value: number) =>
+    setApertures((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
       return next;
     });
 
@@ -253,12 +283,19 @@ export function GallerySurface<T extends GallerySurfaceItem>({
 
       <GallerySurfaceToolbar
         enableFilters={enableFilters}
+        filterMode={filterMode}
         formats={formats}
         toggleFormat={toggleFormat}
         tags={tags}
         allTags={allTags}
         addTag={addTag}
         removeTag={removeTag}
+        focals={focals}
+        focalOptions={focalOptions}
+        toggleFocal={toggleFocal}
+        apertures={apertures}
+        apertureOptions={apertureOptions}
+        toggleAperture={toggleAperture}
         resultCount={filtered.length}
         allSelected={allSelected}
         selectedCount={selectedCount}
@@ -319,12 +356,19 @@ export function GallerySurface<T extends GallerySurfaceItem>({
 
 function GallerySurfaceToolbar({
   enableFilters,
+  filterMode,
   formats,
   toggleFormat,
   tags,
   allTags,
   addTag,
   removeTag,
+  focals,
+  focalOptions,
+  toggleFocal,
+  apertures,
+  apertureOptions,
+  toggleAperture,
   resultCount,
   allSelected,
   selectedCount,
@@ -334,12 +378,19 @@ function GallerySurfaceToolbar({
   onSelectAll,
 }: {
   enableFilters: boolean;
+  filterMode: GalleryFilterMode;
   formats: Set<CategoryId>;
   toggleFormat: (id: CategoryId) => void;
   tags: string[];
   allTags: string[];
   addTag: (tag: string) => void;
   removeTag: (tag: string) => void;
+  focals: Set<number>;
+  focalOptions: number[];
+  toggleFocal: (value: number) => void;
+  apertures: Set<number>;
+  apertureOptions: number[];
+  toggleAperture: (value: number) => void;
   resultCount: number;
   allSelected: boolean;
   selectedCount: number;
@@ -348,11 +399,37 @@ function GallerySurfaceToolbar({
   toolbarExtras?: ReactNode;
   onSelectAll: () => void;
 }) {
+  const [compactFilterOpen, setCompactFilterOpen] = useState(false);
+  const [compactFilterCategory, setCompactFilterCategory] = useState<CompactFilterCategory>('format');
+
   return (
     <div className="sticky top-0 z-30 border-b border-line bg-bg/95 backdrop-blur">
       <div className="flex flex-col gap-3 px-6 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {enableFilters ? <FormatFilter selected={formats} onToggle={toggleFormat} /> : <span className="label">Images</span>}
+          {enableFilters
+            ? filterMode === 'compact'
+              ? (
+                <CompactFilterMenu
+                  open={compactFilterOpen}
+                  onOpenChange={setCompactFilterOpen}
+                  category={compactFilterCategory}
+                  onCategoryChange={setCompactFilterCategory}
+                  formats={formats}
+                  onToggleFormat={toggleFormat}
+                  tags={tags}
+                  allTags={allTags}
+                  onAddTag={addTag}
+                  onRemoveTag={removeTag}
+                  focals={focals}
+                  focalOptions={focalOptions}
+                  onToggleFocal={toggleFocal}
+                  apertures={apertures}
+                  apertureOptions={apertureOptions}
+                  onToggleAperture={toggleAperture}
+                />
+              )
+              : <FormatFilter selected={formats} onToggle={toggleFormat} />
+            : <span className="label">Images</span>}
           <div className="flex flex-wrap items-center gap-2">
             {ownerControls?.visibility && (
               <GalleryVisibilityDropdown
@@ -385,7 +462,26 @@ function GallerySurfaceToolbar({
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {enableFilters ? <TagSearch tags={tags} allTags={allTags} onAdd={addTag} onRemove={removeTag} /> : <span />}
+          {enableFilters
+            ? filterMode === 'compact'
+              ? (
+                <CompactFilterChips
+                  formats={formats}
+                  onToggleFormat={toggleFormat}
+                  tags={tags}
+                  onRemoveTag={removeTag}
+                  focals={focals}
+                  onToggleFocal={toggleFocal}
+                  apertures={apertures}
+                  onToggleAperture={toggleAperture}
+                  onOpenCategory={(nextCategory) => {
+                    setCompactFilterCategory(nextCategory);
+                    setCompactFilterOpen(true);
+                  }}
+                />
+              )
+              : <TagSearch tags={tags} allTags={allTags} onAdd={addTag} onRemove={removeTag} />
+            : <span />}
           <div className="flex flex-wrap items-center gap-1.5">
             {toolbarExtras}
             {selection && (
@@ -431,6 +527,214 @@ function GallerySurfaceToolbar({
       </div>
     </div>
   );
+}
+
+function CompactFilterMenu({
+  open,
+  onOpenChange,
+  category,
+  onCategoryChange,
+  formats,
+  onToggleFormat,
+  tags,
+  allTags,
+  onAddTag,
+  onRemoveTag,
+  focals,
+  focalOptions,
+  onToggleFocal,
+  apertures,
+  apertureOptions,
+  onToggleAperture,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  category: CompactFilterCategory;
+  onCategoryChange: (category: CompactFilterCategory) => void;
+  formats: Set<CategoryId>;
+  onToggleFormat: (id: CategoryId) => void;
+  tags: string[];
+  allTags: string[];
+  onAddTag: (tag: string) => void;
+  onRemoveTag: (tag: string) => void;
+  focals: Set<number>;
+  focalOptions: number[];
+  onToggleFocal: (value: number) => void;
+  apertures: Set<number>;
+  apertureOptions: number[];
+  onToggleAperture: (value: number) => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const activeCount = formats.size + tags.length + focals.size + apertures.size;
+  const categories: Array<{ id: CompactFilterCategory; label: string; count: number; disabled?: boolean }> = [
+    { id: 'format', label: 'Format', count: formats.size, disabled: CATEGORIES.length === 0 },
+    { id: 'tag', label: 'Tag', count: tags.length, disabled: allTags.length === 0 },
+    { id: 'focal', label: 'Focal length', count: focals.size, disabled: focalOptions.length === 0 },
+    { id: 'aperture', label: 'Aperture', count: apertures.size, disabled: apertureOptions.length === 0 },
+  ];
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) onOpenChange(false);
+    };
+    window.addEventListener('mousedown', handlePointerDown);
+    return () => window.removeEventListener('mousedown', handlePointerDown);
+  }, [onOpenChange, open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        className={[
+          'inline-flex h-9 items-center gap-2 border px-3 text-[11px] uppercase tracking-[0.18em] transition-colors hover:border-line-strong',
+          open || activeCount > 0 ? 'border-fg bg-fg text-bg' : 'border-line text-fg',
+        ].join(' ')}
+        aria-label="Add gallery filter"
+      >
+        <Filter size={14} strokeWidth={1.5} />
+        Filter
+        {activeCount > 0 && <span className="text-[10px] opacity-75">{activeCount}</span>}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+0.45rem)] z-50 grid w-[min(34rem,calc(100vw-3rem))] grid-cols-[10rem_minmax(0,1fr)] border border-line bg-surface shadow-[0_12px_40px_rgba(0,0,0,0.24)]">
+          <div className="border-r border-line p-1">
+            {categories.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                disabled={item.disabled}
+                onClick={() => onCategoryChange(item.id)}
+                className={[
+                  'flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[11px] uppercase tracking-[0.16em] transition-colors disabled:cursor-not-allowed disabled:opacity-35',
+                  category === item.id ? 'bg-fg text-bg' : 'hover:bg-faint',
+                ].join(' ')}
+              >
+                <span>{item.label}</span>
+                <span className="inline-flex items-center gap-1">
+                  {item.count > 0 && <span>{item.count}</span>}
+                  <ChevronRight size={12} strokeWidth={1.5} />
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="max-h-72 overflow-y-auto p-2">
+            {category === 'format' && (
+              <CompactFilterValues
+                values={CATEGORIES.map((item) => ({ key: item.id, label: item.label, active: formats.has(item.id) }))}
+                onToggle={(key) => onToggleFormat(key as CategoryId)}
+              />
+            )}
+            {category === 'tag' && (
+              <CompactFilterValues
+                emptyLabel="No tags on these photos"
+                values={allTags.map((tag) => ({ key: tag, label: tag, active: tags.includes(tag) }))}
+                onToggle={(key) => (tags.includes(key) ? onRemoveTag(key) : onAddTag(key))}
+              />
+            )}
+            {category === 'focal' && (
+              <CompactFilterValues
+                emptyLabel="No focal length data"
+                values={focalOptions.map((value) => ({ key: String(value), label: `${formatFilterNumber(value)}mm`, active: focals.has(value) }))}
+                onToggle={(key) => onToggleFocal(Number(key))}
+              />
+            )}
+            {category === 'aperture' && (
+              <CompactFilterValues
+                emptyLabel="No aperture data"
+                values={apertureOptions.map((value) => ({ key: String(value), label: `f/${formatFilterNumber(value)}`, active: apertures.has(value) }))}
+                onToggle={(key) => onToggleAperture(Number(key))}
+              />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompactFilterValues({
+  values,
+  onToggle,
+  emptyLabel = 'No values',
+}: {
+  values: Array<{ key: string; label: string; active: boolean }>;
+  onToggle: (key: string) => void;
+  emptyLabel?: string;
+}) {
+  if (values.length === 0) return <div className="px-3 py-6 text-center text-xs text-muted">{emptyLabel}</div>;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {values.map((value) => (
+        <button
+          key={value.key}
+          type="button"
+          onClick={() => onToggle(value.key)}
+          className={[
+            'inline-flex h-8 items-center border px-2.5 text-xs transition-colors',
+            value.active ? 'border-fg bg-fg text-bg' : 'border-line text-fg hover:border-line-strong',
+          ].join(' ')}
+        >
+          {value.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CompactFilterChips({
+  formats,
+  onToggleFormat,
+  tags,
+  onRemoveTag,
+  focals,
+  onToggleFocal,
+  apertures,
+  onToggleAperture,
+  onOpenCategory,
+}: {
+  formats: Set<CategoryId>;
+  onToggleFormat: (id: CategoryId) => void;
+  tags: string[];
+  onRemoveTag: (tag: string) => void;
+  focals: Set<number>;
+  onToggleFocal: (value: number) => void;
+  apertures: Set<number>;
+  onToggleAperture: (value: number) => void;
+  onOpenCategory: (category: CompactFilterCategory) => void;
+}) {
+  const formatChips = CATEGORIES.filter((item) => formats.has(item.id));
+  const hasFilters = formatChips.length > 0 || tags.length > 0 || focals.size > 0 || apertures.size > 0;
+  if (!hasFilters) return <span className="label">No filters</span>;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {formatChips.map((item) => (
+        <Chip key={item.id} active onClick={() => onOpenCategory('format')} onRemove={() => onToggleFormat(item.id)}>
+          {item.label}
+        </Chip>
+      ))}
+      {tags.map((tag) => (
+        <Chip key={tag} active onClick={() => onOpenCategory('tag')} onRemove={() => onRemoveTag(tag)}>
+          {tag}
+        </Chip>
+      ))}
+      {[...focals].sort((a, b) => a - b).map((value) => (
+        <Chip key={`focal-${value}`} active onClick={() => onOpenCategory('focal')} onRemove={() => onToggleFocal(value)}>
+          {formatFilterNumber(value)}mm
+        </Chip>
+      ))}
+      {[...apertures].sort((a, b) => a - b).map((value) => (
+        <Chip key={`aperture-${value}`} active onClick={() => onOpenCategory('aperture')} onRemove={() => onToggleAperture(value)}>
+          f/{formatFilterNumber(value)}
+        </Chip>
+      ))}
+    </div>
+  );
+}
+
+function formatFilterNumber(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
 }
 
 function GallerySurfaceCard<T extends GallerySurfaceItem>({

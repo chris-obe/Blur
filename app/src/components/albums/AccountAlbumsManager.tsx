@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   Suspense,
+  type CSSProperties,
   type Dispatch,
   type ReactNode,
   type RefObject,
@@ -13,7 +14,7 @@ import {
 import { useAuth0 } from '@auth0/auth0-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Check, ChevronRight, FolderOpen, Grid3X3, Plus, Rows3, Save, Square, X } from 'lucide-react';
+import { ChevronRight, FolderOpen, Grid3X3, PanelLeft, PanelRight, Plus, Rows3, Save, X } from 'lucide-react';
 import { userTokenParams } from '../../auth/config';
 import {
   createAccountGalleryAlbum,
@@ -54,7 +55,7 @@ import { Button } from '../ui/Button';
 import { ErrorBanner } from '../ui/ErrorBanner';
 import { AccountLightboxInfo } from './AccountLightboxInfo';
 import { AccountPhotoImage } from './AccountPhotoImage';
-import { ActionIconButton, ActionTextButton, AlbumActionBar, SelectionPill } from './AlbumActionBar';
+import { ActionIconButton, AlbumActionBar, SelectionPill } from './AlbumActionBar';
 import { AlbumCard } from './AlbumCard';
 import { AlbumDropZone, UploadProgress } from './AlbumDropZone';
 import { AlbumEditWorkspace } from './AlbumEditWorkspace';
@@ -87,6 +88,27 @@ import {
 import { ALBUM_MODE_EASE } from './albumMotion';
 
 const PhotoMetadataGrid = lazy(() => import('../gallery/metadata/PhotoMetadataGrid').then((module) => ({ default: module.PhotoMetadataGrid })));
+const ALBUM_RAIL_PREFS_KEY = 'blur.albumDetailRails';
+
+function readAlbumRailPreference(key: 'albums' | 'options', fallback: boolean) {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(ALBUM_RAIL_PREFS_KEY) ?? '{}') as Partial<Record<'albums' | 'options', boolean>>;
+    return typeof parsed[key] === 'boolean' ? parsed[key] : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeAlbumRailPreference(key: 'albums' | 'options', value: boolean) {
+  if (typeof window === 'undefined') return;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(ALBUM_RAIL_PREFS_KEY) ?? '{}') as Partial<Record<'albums' | 'options', boolean>>;
+    window.localStorage.setItem(ALBUM_RAIL_PREFS_KEY, JSON.stringify({ ...parsed, [key]: value }));
+  } catch {
+    window.localStorage.setItem(ALBUM_RAIL_PREFS_KEY, JSON.stringify({ [key]: value }));
+  }
+}
 
 interface Props {
   mode: 'page' | 'settings';
@@ -849,7 +871,10 @@ function AlbumViewer({
   const editing = detailMode === 'edit';
   const [editorSurface, setEditorSurface] = useState<AlbumEditSurface>('photos');
   const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
-  const detailItems = editing ? albumPhotos : selectedAlbumPhotos;
+  const [albumRailOpen, setAlbumRailOpen] = useState(() => readAlbumRailPreference('albums', editing));
+  const [optionsRailOpen, setOptionsRailOpen] = useState(() => readAlbumRailPreference('options', editing));
+  const drafting = editing || optionsRailOpen;
+  const detailItems = drafting ? albumPhotos : selectedAlbumPhotos;
   const visiblePhotoIds = selectedAlbum ? detailItems.map((photo) => photo.id) : pageSurface === 'all' ? photos.map((photo) => photo.id) : [];
   const allVisibleSelected = visiblePhotoIds.length > 0 && visiblePhotoIds.every((id) => selectedPhotoIds.has(id));
   const selectedAlbumScopedPhotos = detailItems.filter((photo) => selectedPhotoIds.has(photo.id));
@@ -864,7 +889,6 @@ function AlbumViewer({
       : 0
     : selectedGalleryApprovedCount;
   const selectedPendingGalleryCount = selectedPhotos.filter((photo) => photo.galleryStatus === 'pending').length;
-  const allAlbumPhotosSelected = detailItems.length > 0 && detailItems.every((photo) => selectedPhotoIds.has(photo.id));
   const previewUrls = useCachedAccountImageUrls(albumPhotos, accessToken, ownerKey);
   const metadataRows = useMemo(
     () => albumPhotos.map((photo) => ({
@@ -916,6 +940,20 @@ function AlbumViewer({
   const setAllAlbumPhotosSelected = (checked: boolean) => {
     setSelectedPhotoIds(checked ? new Set(detailItems.map((photo) => photo.id)) : new Set());
     setSelectionAnchorId(checked ? detailItems[0]?.id ?? null : null);
+  };
+
+  const toggleAlbumRail = () => {
+    setAlbumRailOpen((current) => {
+      writeAlbumRailPreference('albums', !current);
+      return !current;
+    });
+  };
+
+  const toggleOptionsRail = () => {
+    setOptionsRailOpen((current) => {
+      writeAlbumRailPreference('options', !current);
+      return !current;
+    });
   };
 
   const removePhotoFromAlbum = (photoId: string) => {
@@ -1019,8 +1057,9 @@ function AlbumViewer({
   }
 
   if (selectedAlbum) {
-    const headerTitle = editing ? albumDraft.title || selectedAlbum.title : selectedAlbum.title;
-    const headerDescription = editing ? albumDraft.description || selectedAlbum.description : selectedAlbum.description;
+    const headerTitle = drafting ? albumDraft.title || selectedAlbum.title : selectedAlbum.title;
+    const headerDescription = drafting ? albumDraft.description || selectedAlbum.description : selectedAlbum.description;
+    const gridColumns = `${albumRailOpen ? '14rem ' : ''}minmax(0,1fr)${optionsRailOpen ? ' 18rem' : ''}`;
     const detailsSlot = editing && editorSurface === 'details' ? (
       <section className="p-6">
         <div className="mb-3">
@@ -1078,12 +1117,12 @@ function AlbumViewer({
 
         <div
           className={[
-            'grid min-h-0 flex-1 gap-4 overflow-hidden',
-            editing ? 'xl:grid-cols-[14rem_minmax(0,1fr)_18rem]' : 'xl:grid-cols-[minmax(0,1fr)]',
+            'grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto xl:grid-cols-[var(--album-detail-columns)] xl:overflow-hidden',
           ].join(' ')}
+          style={{ '--album-detail-columns': gridColumns } as CSSProperties}
         >
           <AnimatePresence initial={false}>
-            {editing && (
+            {albumRailOpen && (
               <motion.aside
                 key="album-detail-nav"
                 className="min-h-0 space-y-3 xl:h-full xl:overflow-y-auto xl:[scrollbar-gutter:stable]"
@@ -1104,6 +1143,7 @@ function AlbumViewer({
             <GallerySurface
               items={detailItems}
               enableReactions={false}
+              filterMode="compact"
               emptyMessage="No photos in this album yet."
               selection={editing ? {
                 selectedIds: selectedPhotoIds,
@@ -1129,7 +1169,7 @@ function AlbumViewer({
                 }),
               } : undefined}
               ownerControls={{
-                visibility: {
+                visibility: editing || optionsRailOpen ? undefined : {
                   value: editing ? albumDraft.status : selectedAlbum.status,
                   busy,
                   onChange: (status) => {
@@ -1148,13 +1188,22 @@ function AlbumViewer({
                   : selectedAlbum.status === 'published'
                     ? 'Embed settings are still loading'
                     : 'Make the album public to embed it',
-                onEmbedAlbum: () => onEmbedAlbum(selectedAlbum),
+                onEmbedAlbum: editing ? undefined : () => onEmbedAlbum(selectedAlbum),
                 onReload: () => void reload(),
                 onAdd: () => fileInputRef.current?.click(),
                 addLabel: 'Upload',
               }}
-              toolbarExtras={editing ? (
+              toolbarExtras={(
                 <>
+                  <div className="mr-1 flex border border-line">
+                    <ActionIconButton label={albumRailOpen ? 'Hide albums rail' : 'Show albums rail'} active={albumRailOpen} onClick={toggleAlbumRail}>
+                      <PanelLeft size={14} strokeWidth={1.5} />
+                    </ActionIconButton>
+                    <ActionIconButton label={optionsRailOpen ? 'Hide album options' : 'Show album options'} active={optionsRailOpen} onClick={toggleOptionsRail}>
+                      <PanelRight size={14} strokeWidth={1.5} />
+                    </ActionIconButton>
+                  </div>
+                  {editing && (
                   <div className="mr-1 flex border border-line">
                     <ActionIconButton label="Arrange photos" active={editorSurface === 'photos'} onClick={() => setEditorSurface('photos')}>
                       <Grid3X3 size={14} strokeWidth={1.5} />
@@ -1163,22 +1212,15 @@ function AlbumViewer({
                       <Rows3 size={14} strokeWidth={1.5} />
                     </ActionIconButton>
                   </div>
-                  {detailItems.length > 0 && (
-                    <ActionTextButton
-                      label={allAlbumPhotosSelected ? 'Clear photo selection' : 'Select all album photos'}
-                      active={allAlbumPhotosSelected}
-                      onClick={() => setAllAlbumPhotosSelected(!allAlbumPhotosSelected)}
-                    >
-                      {allAlbumPhotosSelected ? <Check size={13} strokeWidth={1.7} /> : <Square size={13} strokeWidth={1.6} />}
-                      Select all
-                    </ActionTextButton>
                   )}
-                  <Button variant="solid" className="h-9" onClick={() => void saveAlbum()} disabled={busy || !albumDraft.title.trim()}>
-                    <Save size={14} strokeWidth={1.5} />
-                    Save
-                  </Button>
+                  {editing && (
+                    <Button variant="solid" className="h-9" onClick={() => void saveAlbum()} disabled={busy || !albumDraft.title.trim()}>
+                      <Save size={14} strokeWidth={1.5} />
+                      Save
+                    </Button>
+                  )}
                 </>
-              ) : undefined}
+              )}
               uploadSlot={editing && editorSurface === 'photos' ? (
                 <div className="px-6 pt-6">
                   <AlbumDropZone
@@ -1244,7 +1286,7 @@ function AlbumViewer({
           </div>
 
           <AnimatePresence initial={false}>
-            {editing && (
+            {optionsRailOpen && (
               <motion.div
                 key="album-detail-options"
                 className="min-h-0 xl:h-full xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]"
