@@ -40,6 +40,7 @@ import {
   type ImageProcessingProgress,
 } from '../../lib/imageProcessing';
 import { DEFAULT_SUBJECT_DISTANCE_PRESET_ID } from '../../lib/subjectDistance';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useCatalog } from '../../store/CatalogProvider';
 import { GallerySurface } from '../gallery/GallerySurface';
 import {
@@ -131,6 +132,7 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
   const selectedAlbum = albums.find((album) => album.slug === selectedAlbumSlug) ?? null;
   const modeParam = searchParams.get('mode');
   const detailMode: AlbumDefaultMode = modeParam === 'edit' || (!modeParam && preferences.defaultAlbumMode === 'edit') || isNewRoute ? 'edit' : 'view';
+  useDocumentTitle(mode === 'page' ? ['Albums', selectedAlbum?.title ?? (isNewRoute ? 'New album' : null)] : ['Settings', 'Albums']);
   const albumPhotos = useMemo(
     () => albumDraft.photos
       .map((item, index) => {

@@ -1,9 +1,12 @@
 import type { ReactNode } from 'react';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { BottomNav } from './BottomNav';
 
 export function AppShell({ title, children }: { title: string; children: ReactNode }) {
+  useDocumentTitle([title]);
+
   return (
     <div className="fixed inset-0 flex overflow-hidden bg-bg text-fg">
       <Sidebar />

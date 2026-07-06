@@ -3,6 +3,7 @@ import { EmbedGalleryCard } from '../components/embed/EmbedGalleryCard';
 import { type EmbedAlbumLayout } from '../lib/galleryApi';
 import type { GalleryItem } from '../lib/types';
 import { useEmbedAlbumQuery, useEmbedPhotoSetQuery } from '../hooks/queries';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 // One page for both multi-image routes: album auto-select (/embed/album/:slug)
 // and selected-set (/embed/photos?ids=…). Layout comes from ?layout, else template.
@@ -27,6 +28,7 @@ export function EmbedGallery({ mode }: { mode: 'album' | 'set' }) {
   );
   const active = mode === 'album' ? albumQuery : setQuery;
   const data = active.data ?? null;
+  useDocumentTitle(['Embed', data?.album?.title ?? (mode === 'set' ? 'Selected photos' : null)]);
   const error = active.error
     ? active.error instanceof Error ? active.error.message : 'Embed failed to load'
     : null;

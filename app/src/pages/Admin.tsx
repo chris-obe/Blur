@@ -3,6 +3,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { AlertTriangle, RefreshCw, Shield } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Chip } from '../components/ui/Chip';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { isDevAdminBypass } from '../auth/adminAccess';
 import { useAdminAccess } from '../auth/AdminAccessProvider';
 import { adminAuthorizationParams, adminTokenParams } from '../auth/config';
@@ -136,6 +137,8 @@ function AdminConsole() {
   const catalog = useCatalog();
   const runtimeFeatureFlags = useFeatureFlags();
   const [section, setSection] = useState<AdminSection>('overview');
+  const activeSection = SECTIONS.find((item) => item.id === section);
+  useDocumentTitle(['Admin', activeSection?.label]);
   const [adminIdentity, setAdminIdentity] = useState<AdminIdentity | null>(null);
   const [adminToken, setAdminToken] = useState<string | undefined>(undefined);
   const [status, setStatus] = useState<CatalogAdminStatus | null>(null);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { PhotoEmbedCard } from '../components/embed/PhotoEmbedCard';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { getEmbedPhoto, type EmbedPhotoResponse } from '../lib/galleryApi';
 
 export function EmbedPhoto() {
@@ -9,6 +10,7 @@ export function EmbedPhoto() {
   const albumSlug = params.get('album');
   const [data, setData] = useState<EmbedPhotoResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useDocumentTitle(['Embed', data?.photo.title]);
 
   useEffect(() => {
     let cancelled = false;

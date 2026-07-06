@@ -17,6 +17,7 @@ import { useClearCachedAccountImagesOnOwnerChange } from '../../lib/accountImage
 import { suggestGalleryMetadata } from '../../lib/galleryMetadata';
 import type { GalleryItem, ViewEntry } from '../../lib/types';
 import { usePublicGalleryPhotos } from '../../hooks/usePublicGalleryPhotos';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useCatalog } from '../../store/CatalogProvider';
 import { useReactions } from '../../store/ReactionsProvider';
 import { CachedAccountImage } from './CachedAccountImage';
@@ -178,6 +179,10 @@ export function GalleryPage({ albumSlug, initialPhotoId, closePath }: GalleryPag
 
   const activeAlbum = ownerAlbum ?? album;
   const displayItems = useMemo(() => ownerAlbum?.photos ?? items, [items, ownerAlbum]);
+  const activePhoto = initialPhotoId ? displayItems.find((item) => item.id === initialPhotoId) : null;
+  useDocumentTitle(albumSlug
+    ? ['Albums', activeAlbum?.title ?? (albumPasswordRequired ? 'Protected album' : null), activePhoto?.title]
+    : ['Gallery', activePhoto?.title]);
   const isOwnerAlbum = !!ownerAlbum;
   const selectedAlbumPhotos = useMemo(
     () => (ownerAlbum?.photos ?? []).filter((photo) => selectedPhotoIds.has(photo.id)),

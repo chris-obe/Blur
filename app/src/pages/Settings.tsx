@@ -3,6 +3,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { Code2, FolderOpen, Heart, ImagePlus, Palette, RefreshCw, Save, Shield, User } from 'lucide-react';
 import { useAdminAccess } from '../auth/AdminAccessProvider';
 import { queryKeys, useAccountSummaryQuery, useInvalidate, useUserToken } from '../hooks/queries';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useTheme } from '../store/ThemeProvider';
 import { AccountAlbumsManager } from '../components/albums/AccountAlbumsManager';
 import { BlogEmbedManager } from '../components/settings/BlogEmbedManager';
@@ -25,6 +26,8 @@ export function Settings() {
   const { isAdmin } = useAdminAccess();
   const [section, setSection] = useState<SettingsSection>('profile');
   const sections = isAdmin ? SECTIONS : SECTIONS.filter((item) => item.id !== 'embeds');
+  const activeSection = SECTIONS.find((item) => item.id === section);
+  useDocumentTitle(['Settings', activeSection?.label]);
 
   useEffect(() => {
     if (!isAdmin && section === 'embeds') setSection('profile');
