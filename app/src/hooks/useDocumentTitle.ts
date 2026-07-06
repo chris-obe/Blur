@@ -6,7 +6,7 @@ export function formatDocumentTitle(parts: Array<string | null | undefined | fal
   const clean = parts
     .map((part) => typeof part === 'string' ? part.trim() : '')
     .filter(Boolean);
-  return clean.length > 0 ? [PRODUCT_TITLE, ...clean].join(' | ') : PRODUCT_TITLE;
+  return clean.length > 0 ? clean.join(' | ') : PRODUCT_TITLE;
 }
 
 export function useDocumentTitle(parts: Array<string | null | undefined | false>) {
