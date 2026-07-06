@@ -14,7 +14,7 @@ import {
 } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronRight, Eye, FolderOpen, Grid3X3, Plus, Rows3, Save, Settings2, X } from 'lucide-react';
+import { ChevronRight, Eye, FolderOpen, Grid3X3, ImagePlus, Plus, Rows3, Save, Settings2, X } from 'lucide-react';
 import { userTokenParams } from '../../auth/config';
 import {
   createAccountGalleryAlbum,
@@ -32,6 +32,11 @@ import {
   type GalleryAlbum,
   type GalleryAlbumStatus,
 } from '../../lib/galleryApi';
+import {
+  missingThumbnailPhotos,
+  regenerateAccountThumbnails,
+  type ThumbnailRegenerationProgress,
+} from '../../lib/galleryThumbnails';
 import { useCachedAccountImageUrls, usePruneCachedAccountImages } from '../../lib/accountImageCache';
 import { suggestGalleryMetadata } from '../../lib/galleryMetadata';
 import {
@@ -128,6 +133,7 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<ImageProcessingProgress | null>(null);
+  const [thumbnailProgress, setThumbnailProgress] = useState<ThumbnailRegenerationProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const selectedAlbum = albums.find((album) => album.slug === selectedAlbumSlug) ?? null;
@@ -443,6 +449,26 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
     }
   };
 
+  const regenerateAccountPhotoThumbnails = async (photosToFix: AdminGalleryPhoto[]) => {
+    if (photosToFix.length === 0) return;
+    setError(null);
+    setThumbnailProgress(null);
+    try {
+      const token = accessToken ?? await getToken();
+      setAccessToken(token);
+      const updated = await regenerateAccountThumbnails(photosToFix, token, setThumbnailProgress);
+      setPhotos((current) => mergePhotos(current, updated));
+      setPhotoDrafts((current) => ({
+        ...current,
+        ...Object.fromEntries(updated.map((photo) => [photo.id, draftFromPhoto(photo)])),
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Thumbnail generation failed');
+    } finally {
+      setThumbnailProgress(null);
+    }
+  };
+
   const openSelectionEmbed = (options: { photoIds?: string[]; albumSlug?: string; albumTitle?: string } = {}) => {
     const photoIds = options.photoIds ?? selectedApprovedPhotoIds;
     if (photoIds.length === 0) return;
@@ -539,6 +565,7 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
             loading={loading}
             busy={busy}
             progress={progress}
+            thumbnailProgress={thumbnailProgress}
             embedReady={embedReady}
             error={error}
             manager={manager}
@@ -557,6 +584,7 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
             submitSelectedToGallery={submitSelectedToGallery}
             withdrawSelectedFromGallery={withdrawSelectedFromGallery}
             publishOne={publishOne}
+            regenerateThumbnails={regenerateAccountPhotoThumbnails}
             patchAlbum={patchAlbum}
             onEmbedSelected={openSelectionEmbed}
             onEmbedPhoto={(photo, albumSlug) => setEmbedRequest({
@@ -585,7 +613,7 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
           onIndex={(nextIndex) => setViewPhotoId(lightboxPhotos[nextIndex]?.id ?? null)}
           onClose={() => setViewPhotoId(null)}
           renderImage={(photo, className) => (
-            <AccountPhotoImage photo={photo} accessToken={accessToken} ownerKey={ownerKey} className={className} />
+            <AccountPhotoImage photo={photo} accessToken={accessToken} ownerKey={ownerKey} className={className} size="full" />
           )}
           renderInfo={(photo) => (
             <AccountLightboxInfo
@@ -820,6 +848,7 @@ function AlbumViewer({
   loading,
   busy,
   progress,
+  thumbnailProgress,
   embedReady,
   error,
   manager,
@@ -838,6 +867,7 @@ function AlbumViewer({
   submitSelectedToGallery,
   withdrawSelectedFromGallery,
   publishOne,
+  regenerateThumbnails,
   patchAlbum,
   onEmbedSelected,
   onEmbedPhoto,
@@ -866,6 +896,7 @@ function AlbumViewer({
   loading: boolean;
   busy: boolean;
   progress: ImageProcessingProgress | null;
+  thumbnailProgress: ThumbnailRegenerationProgress | null;
   embedReady: boolean;
   error: string | null;
   manager: ReactNode;
@@ -884,6 +915,7 @@ function AlbumViewer({
   submitSelectedToGallery: () => Promise<void>;
   withdrawSelectedFromGallery: () => Promise<void>;
   publishOne: (photoId: string) => Promise<void>;
+  regenerateThumbnails: (photos: AdminGalleryPhoto[]) => Promise<void>;
   patchAlbum: (slug: string, updates: AlbumMutation) => Promise<GalleryAlbum>;
   onEmbedSelected: (options?: { photoIds?: string[]; albumSlug?: string; albumTitle?: string }) => void;
   onEmbedPhoto: (photo: AdminGalleryPhoto, albumSlug?: string) => void;
@@ -943,6 +975,7 @@ function AlbumViewer({
     () => selectedPhotos.filter((photo) => photo.galleryStatus === 'pending').length,
     [selectedPhotos],
   );
+  const missingDetailThumbnails = useMemo(() => missingThumbnailPhotos(detailItems), [detailItems]);
   const previewUrls = useCachedAccountImageUrls(albumPhotos, accessToken, ownerKey);
   const metadataRows = useMemo(
     () => albumPhotos.map((photo) => ({
@@ -1039,8 +1072,8 @@ function AlbumViewer({
     }));
   }, [selectedAlbum, selectedPhotoIds, setAlbumDraft]);
 
-  const renderAccountPhotoImage = useCallback((photo: AlbumPhotoView, className: string) => (
-    <AccountPhotoImage photo={photo} accessToken={accessToken} ownerKey={ownerKey} className={className} />
+  const renderAccountPhotoImage = useCallback((photo: AlbumPhotoView, className: string, context: 'card' | 'lightbox') => (
+    <AccountPhotoImage photo={photo} accessToken={accessToken} ownerKey={ownerKey} className={className} size={context === 'card' ? 'thumb' : 'full'} />
   ), [accessToken, ownerKey]);
 
   const albumCardDecorations = useMemo(() => {
@@ -1126,6 +1159,57 @@ function AlbumViewer({
     setSelectionAnchorId,
     stageSelectedAlbumPhotoVisibility,
   ]);
+  const mediaHealthSlot = missingDetailThumbnails.length > 0 ? (
+    <div className="px-6 pt-6">
+      <section className="border border-line bg-faint p-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-bold tracking-tight">Missing grid thumbnails</div>
+            <div className="mt-1 text-xs text-muted">
+              {missingDetailThumbnails.length} photo{missingDetailThumbnails.length === 1 ? '' : 's'} in this view will load full images until thumbnails are generated.
+            </div>
+          </div>
+          <Button
+            type="button"
+            onClick={() => void regenerateThumbnails(missingDetailThumbnails)}
+            disabled={busy || !!thumbnailProgress}
+          >
+            <ImagePlus size={14} strokeWidth={1.5} />
+            Generate
+          </Button>
+        </div>
+        {thumbnailProgress && (
+          <div className="mt-3 text-xs">
+            <div className="mb-1 flex justify-between gap-3 text-muted">
+              <span>{thumbnailProgress.label}</span>
+              <span>{thumbnailProgress.current}/{thumbnailProgress.total}</span>
+            </div>
+            <div className="h-1.5 w-full bg-line">
+              <div
+                className="h-full bg-fg transition-all"
+                style={{ width: `${Math.round((thumbnailProgress.current / thumbnailProgress.total) * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </section>
+    </div>
+  ) : null;
+  const uploadSlot = (
+    <>
+      {mediaHealthSlot}
+      {editing && editorSurface === 'photos' && (
+        <div className="px-6 pt-6">
+          <AlbumDropZone
+            empty={albumPhotos.length === 0}
+            busy={busy}
+            onChoose={() => fileInputRef.current?.click()}
+            onFiles={(files) => void uploadFiles(files)}
+          />
+        </div>
+      )}
+    </>
+  );
 
   useEffect(() => {
     if (!editing || !selectedAlbum) return undefined;
@@ -1320,16 +1404,7 @@ function AlbumViewer({
                   )}
                 </>
               )}
-              uploadSlot={editing && editorSurface === 'photos' ? (
-                <div className="px-6 pt-6">
-                  <AlbumDropZone
-                    empty={albumPhotos.length === 0}
-                    busy={busy}
-                    onChoose={() => fileInputRef.current?.click()}
-                    onFiles={(files) => void uploadFiles(files)}
-                  />
-                </div>
-              ) : undefined}
+              uploadSlot={uploadSlot}
               contentSlot={detailsSlot}
               showCardDetails={editing || preferences.showPhotoTitles}
               cardDecorations={albumCardDecorations}
@@ -1420,7 +1495,7 @@ function AlbumViewer({
                   className="block w-full text-left"
                   aria-label={`Open ${photo.title}`}
                 >
-                  <AccountPhotoImage photo={photo} accessToken={accessToken} ownerKey={ownerKey} className="w-full object-cover" />
+                  <AccountPhotoImage photo={photo} accessToken={accessToken} ownerKey={ownerKey} className="w-full object-cover" size="thumb" />
                 </button>
                 <SelectionPill
                   selected={selected}

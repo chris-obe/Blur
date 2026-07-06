@@ -53,6 +53,7 @@ export interface GalleryItem {
   capturedAt?: string | null;
   tags: string[];
   reactionCounts?: ReactionCounts;
+  hasThumbnail?: boolean;
 }
 
 export interface ExtractedExif {

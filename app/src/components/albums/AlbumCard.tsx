@@ -23,7 +23,7 @@ export function AlbumCard({
     <button type="button" onClick={onOpen} className="group min-w-0 border border-line text-left transition-colors hover:border-line-strong">
       <div className="aspect-[4/3] w-full overflow-hidden border-b border-line bg-faint">
         {cover ? (
-          <AccountPhotoImage photo={cover} accessToken={accessToken} ownerKey={ownerKey} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
+          <AccountPhotoImage photo={cover} accessToken={accessToken} ownerKey={ownerKey} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" size="thumb" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-muted">
             <FolderOpen size={24} strokeWidth={1.4} />

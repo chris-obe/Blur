@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AdminGalleryPhoto } from './galleryApi';
+import { thumbSrc } from './imageSrc';
 
 const CACHE_NAME = 'blur-account-images-v1';
 const CACHE_ORIGIN = 'https://blur.local-cache';
@@ -7,26 +8,31 @@ const CACHE_ORIGIN = 'https://blur.local-cache';
 const objectUrls = new Map<string, string>();
 const inflight = new Map<string, Promise<string | null>>();
 
-type AccountImagePhoto = Pick<AdminGalleryPhoto, 'id' | 'src' | 'updatedAt'>;
+type AccountImagePhoto = Pick<AdminGalleryPhoto, 'id' | 'src' | 'updatedAt' | 'hasThumbnail'>;
+export type AccountImageSize = 'thumb' | 'full';
 
 function safePart(value: string) {
   return encodeURIComponent(value.replace(/\s+/g, ' ').trim() || 'unknown');
 }
 
 function versionForPhoto(photo: AccountImagePhoto) {
-  return safePart(photo.updatedAt ?? photo.src ?? 'current');
+  return safePart(`${photo.updatedAt ?? photo.src ?? 'current'}:${photo.hasThumbnail ? 'thumb' : 'no-thumb'}`);
 }
 
-function cacheKey(ownerKey: string, photo: AccountImagePhoto) {
-  return `${safePart(ownerKey)}/${safePart(photo.id)}/${versionForPhoto(photo)}`;
+function cacheKey(ownerKey: string, photo: AccountImagePhoto, size: AccountImageSize) {
+  return `${safePart(ownerKey)}/${safePart(photo.id)}/${versionForPhoto(photo)}/${size}`;
 }
 
 function cacheRequest(key: string) {
   return new Request(`${CACHE_ORIGIN}/account-images/${key}`);
 }
 
-function accountImageUrl(photo: AccountImagePhoto) {
-  return `/api/account/gallery/photos/${encodeURIComponent(photo.id)}/image`;
+function withSize(url: string, size: AccountImageSize) {
+  return size === 'thumb' ? thumbSrc(url) : url;
+}
+
+function accountImageUrl(photo: AccountImagePhoto, size: AccountImageSize) {
+  return withSize(`/api/account/gallery/photos/${encodeURIComponent(photo.id)}/image`, size);
 }
 
 function isPublicImage(photo: AccountImagePhoto) {
@@ -50,11 +56,12 @@ export async function cachedAccountImageUrl(
   photo: AccountImagePhoto,
   accessToken: string | null,
   ownerKey: string | null,
+  size: AccountImageSize = 'full',
 ) {
-  if (isPublicImage(photo)) return photo.src ?? null;
+  if (isPublicImage(photo)) return photo.src ? withSize(photo.src, size) : null;
   if (!accessToken || !ownerKey) return null;
 
-  const key = cacheKey(ownerKey, photo);
+  const key = cacheKey(ownerKey, photo, size);
   const existing = objectUrls.get(key);
   if (existing) return existing;
 
@@ -67,7 +74,7 @@ export async function cachedAccountImageUrl(
     const cached = cache ? await cache.match(request) : null;
     if (cached) return objectUrlForBlob(key, await cached.blob());
 
-    const response = await fetch(accountImageUrl(photo), {
+    const response = await fetch(accountImageUrl(photo, size), {
       headers: { authorization: `Bearer ${accessToken}` },
     });
     if (!response.ok) return null;
@@ -90,7 +97,10 @@ export async function cachedAccountImageUrl(
 export async function pruneCachedAccountImages(ownerKey: string | null, photos: AccountImagePhoto[]) {
   if (!ownerKey) return;
   const ownerPrefix = `${safePart(ownerKey)}/`;
-  const valid = new Set(photos.filter((photo) => !isPublicImage(photo)).map((photo) => cacheKey(ownerKey, photo)));
+  const valid = new Set(photos.filter((photo) => !isPublicImage(photo)).flatMap((photo) => [
+    cacheKey(ownerKey, photo, 'full'),
+    cacheKey(ownerKey, photo, 'thumb'),
+  ]));
 
   for (const [key, url] of objectUrls) {
     if (!key.startsWith(ownerPrefix) || valid.has(key)) continue;
@@ -134,19 +144,20 @@ export function useCachedAccountImage(
   photo: AccountImagePhoto,
   accessToken: string | null,
   ownerKey: string | null,
+  size: AccountImageSize = 'full',
 ) {
-  const [src, setSrc] = useState<string | null>(() => (isPublicImage(photo) ? photo.src ?? null : null));
+  const [src, setSrc] = useState<string | null>(() => (isPublicImage(photo) && photo.src ? withSize(photo.src, size) : null));
 
   useEffect(() => {
     let cancelled = false;
-    setSrc(isPublicImage(photo) ? photo.src ?? null : null);
-    void cachedAccountImageUrl(photo, accessToken, ownerKey).then((url) => {
+    setSrc(isPublicImage(photo) && photo.src ? withSize(photo.src, size) : null);
+    void cachedAccountImageUrl(photo, accessToken, ownerKey, size).then((url) => {
       if (!cancelled) setSrc(url);
     });
     return () => {
       cancelled = true;
     };
-  }, [accessToken, ownerKey, photo.id, photo.src, photo.updatedAt]);
+  }, [accessToken, ownerKey, photo.hasThumbnail, photo.id, photo.src, photo.updatedAt, size]);
 
   return src;
 }
@@ -174,15 +185,16 @@ export function useCachedAccountImageUrls(
   photos: AccountImagePhoto[],
   accessToken: string | null,
   ownerKey: string | null,
+  size: AccountImageSize = 'full',
 ) {
-  const key = useMemo(() => photos.map((photo) => `${photo.id}:${photo.src}:${photo.updatedAt ?? ''}`).join('|'), [photos]);
+  const key = useMemo(() => photos.map((photo) => `${photo.id}:${photo.src}:${photo.updatedAt ?? ''}:${photo.hasThumbnail ? 'thumb' : 'no-thumb'}`).join('|'), [photos]);
   const [urls, setUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       const entries = await mapWithConcurrency(photos, BATCH_FETCH_CONCURRENCY, async (photo) => {
-        const url = await cachedAccountImageUrl(photo, accessToken, ownerKey);
+        const url = await cachedAccountImageUrl(photo, accessToken, ownerKey, size);
         return url ? ([photo.id, url] as const) : null;
       });
       if (!cancelled) setUrls(Object.fromEntries(entries.filter((entry): entry is readonly [string, string] => !!entry)));
@@ -193,14 +205,14 @@ export function useCachedAccountImageUrls(
     };
     // `key` captures photo identity/version changes without depending on array identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken, ownerKey, key]);
+  }, [accessToken, ownerKey, key, size]);
 
   return urls;
 }
 
 export function usePruneCachedAccountImages(ownerKey: string | null, photos: AccountImagePhoto[]) {
   const previousOwner = useRef<string | null>(ownerKey);
-  const key = useMemo(() => photos.map((photo) => `${photo.id}:${photo.updatedAt ?? photo.src ?? ''}`).join('|'), [photos]);
+  const key = useMemo(() => photos.map((photo) => `${photo.id}:${photo.updatedAt ?? photo.src ?? ''}:${photo.hasThumbnail ? 'thumb' : 'no-thumb'}`).join('|'), [photos]);
 
   useEffect(() => {
     if (previousOwner.current && previousOwner.current !== ownerKey) {

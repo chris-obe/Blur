@@ -351,7 +351,9 @@ function AdminConsole() {
         label: 'Gallery',
         value: galleryLoaded ? `${galleryPhotos.length} photos` : 'Loading',
         detail: galleryError ?? (
-          galleryPhotos.some((photo) => photo.galleryStatusNeedsReview)
+          galleryPhotos.some((photo) => !photo.hasThumbnail)
+            ? `${galleryPhotos.filter((photo) => !photo.hasThumbnail).length} missing thumbnails`
+            : galleryPhotos.some((photo) => photo.galleryStatusNeedsReview)
             ? `${galleryPhotos.filter((photo) => photo.galleryStatusNeedsReview).length} need review`
             : `${galleryPhotos.filter((photo) => photo.galleryStatus === 'pending').length} pending approval`
         ),

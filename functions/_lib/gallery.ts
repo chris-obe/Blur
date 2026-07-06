@@ -72,6 +72,7 @@ export function photoFromRow(
     galleryStatus,
     galleryStatusNeedsReview: admin ? (row.gallery_status_review_required ?? 0) > 0 : undefined,
     src,
+    hasThumbnail: !!row.thumb_object_key,
     formatId: row.format_id,
     camera: row.camera,
     cameraCatalogId: admin ? row.camera_catalog_id ?? undefined : undefined,
@@ -193,6 +194,7 @@ export function cleanId(value: string) {
 
 export const DEFAULT_PAGE_LIMIT = 100;
 export const MAX_PAGE_LIMIT = 200;
+export const MAX_THUMB_BYTES = 256 * 1024;
 
 export interface PageParams {
   limit: number;
@@ -205,6 +207,25 @@ export function pageParamsFromUrl(url: URL): PageParams {
     ? Math.min(MAX_PAGE_LIMIT, Math.round(rawLimit))
     : DEFAULT_PAGE_LIMIT;
   return { limit, cursor: decodeCursor(url.searchParams.get('cursor')) };
+}
+
+export async function storePhotoThumbnail(env: GalleryEnv, row: GalleryRow, thumb: File) {
+  if (thumb.size <= 0 || thumb.size > MAX_THUMB_BYTES) {
+    return { error: 'thumbnail must be 256 KB or smaller', status: 413 as const };
+  }
+  const contentType = thumb.type || 'image/webp';
+  if (!contentType.startsWith('image/')) {
+    return { error: 'thumbnail must be an image file', status: 400 as const };
+  }
+
+  const thumbObjectKey = `${row.object_key}.thumb`;
+  await env.GALLERY_BUCKET.put(thumbObjectKey, thumb.stream(), {
+    httpMetadata: { contentType },
+  });
+  await env.GALLERY_DB.prepare('UPDATE gallery_photos SET thumb_object_key = ? WHERE id = ?')
+    .bind(thumbObjectKey, row.id)
+    .run();
+  return { thumbObjectKey };
 }
 
 export function encodeCursor(values: (string | number | null)[]): string {

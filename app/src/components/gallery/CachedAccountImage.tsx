@@ -1,8 +1,8 @@
 import { ImagePlus } from 'lucide-react';
 import type { AdminGalleryPhoto } from '../../lib/galleryApi';
-import { useCachedAccountImage } from '../../lib/accountImageCache';
+import { useCachedAccountImage, type AccountImageSize } from '../../lib/accountImageCache';
 
-type CachedAccountImagePhoto = Pick<AdminGalleryPhoto, 'id' | 'src' | 'updatedAt'>;
+type CachedAccountImagePhoto = Pick<AdminGalleryPhoto, 'id' | 'src' | 'updatedAt' | 'hasThumbnail'>;
 
 export function CachedAccountImage({
   photo,
@@ -10,14 +10,16 @@ export function CachedAccountImage({
   ownerKey,
   className,
   alt = '',
+  size = 'full',
 }: {
   photo: CachedAccountImagePhoto;
   accessToken: string | null;
   ownerKey: string | null;
   className: string;
   alt?: string;
+  size?: AccountImageSize;
 }) {
-  const src = useCachedAccountImage(photo, accessToken, ownerKey);
+  const src = useCachedAccountImage(photo, accessToken, ownerKey, size);
 
   if (!src) {
     return (

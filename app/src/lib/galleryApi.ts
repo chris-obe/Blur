@@ -432,6 +432,21 @@ export async function uploadAdminGalleryPhoto(form: FormData, accessToken?: stri
   return (await readJson<{ photo: AdminGalleryPhoto }>(res)).photo;
 }
 
+export async function regenerateAdminGalleryPhotoThumbnail(
+  id: string,
+  thumb: File,
+  accessToken?: string,
+): Promise<AdminGalleryPhoto> {
+  const form = new FormData();
+  form.set('thumb', thumb);
+  const res = await fetch(`/api/admin/gallery/${encodeURIComponent(id)}/thumbnail`, {
+    method: 'POST',
+    headers: adminHeaders(accessToken),
+    body: form,
+  });
+  return (await readJson<{ photo: AdminGalleryPhoto }>(res)).photo;
+}
+
 export async function listAdminGalleryTags(accessToken?: string): Promise<GalleryTag[]> {
   const res = await fetch('/api/admin/gallery/tags', { headers: adminHeaders(accessToken) });
   return (await readJson<AdminGalleryTagsResponse>(res)).tags;
@@ -486,6 +501,21 @@ export async function listAccountGalleryPhotos(accessToken: string): Promise<Adm
 
 export async function uploadAccountGalleryPhoto(form: FormData, accessToken: string): Promise<AdminGalleryPhoto> {
   const res = await fetch('/api/account/gallery/photos', {
+    method: 'POST',
+    headers: authHeaders(accessToken),
+    body: form,
+  });
+  return (await readJson<{ photo: AdminGalleryPhoto }>(res)).photo;
+}
+
+export async function regenerateAccountGalleryPhotoThumbnail(
+  id: string,
+  thumb: File,
+  accessToken: string,
+): Promise<AdminGalleryPhoto> {
+  const form = new FormData();
+  form.set('thumb', thumb);
+  const res = await fetch(`/api/account/gallery/photos/${encodeURIComponent(id)}/thumbnail`, {
     method: 'POST',
     headers: authHeaders(accessToken),
     body: form,

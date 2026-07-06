@@ -77,6 +77,7 @@ export interface GalleryOwnerControls {
 
 type GalleryFilterMode = 'expanded' | 'compact';
 type CompactFilterCategory = 'format' | 'tag' | 'focal' | 'aperture';
+export type GalleryRenderImageContext = 'card' | 'lightbox';
 
 interface Props<T extends GallerySurfaceItem> {
   items: T[];
@@ -105,7 +106,7 @@ interface Props<T extends GallerySurfaceItem> {
   activePhotoId?: string | null;
   initialPhotoId?: string;
   emptyMessage?: string;
-  renderImage?: (item: T, className: string) => ReactNode;
+  renderImage?: (item: T, className: string, context: GalleryRenderImageContext) => ReactNode;
   renderInfo?: (item: T, context: { entry: ViewEntry; index: number; count: number; close: () => void }) => ReactNode;
   onOpenPhoto?: (item: T) => void;
   onClosePhoto?: () => void;
@@ -345,7 +346,7 @@ export function GallerySurface<T extends GallerySurfaceItem>({
           onIndex={(index) => setView((currentView) => (currentView ? { ...currentView, index } : currentView))}
           onClose={closeView}
           getAnchorRect={getAnchorRect}
-          renderImage={renderImage ? (entry, className) => renderImage(entry.item, className) : undefined}
+          renderImage={renderImage ? (entry, className) => renderImage(entry.item, className, 'lightbox') : undefined}
           renderInfo={(entry, context) => renderInfo
             ? renderInfo(entry.item, { entry, ...context })
             : <LightboxInfo entry={entry} enableReactions={enableReactions} />}
@@ -759,7 +760,7 @@ type GallerySurfaceCardProps<T extends GallerySurfaceItem> = {
     onDragEnd: () => void;
   };
   registerAnchor: (id: string, el: HTMLElement | null) => void;
-  renderImage?: (item: T, className: string) => ReactNode;
+  renderImage?: (item: T, className: string, context: GalleryRenderImageContext) => ReactNode;
   onOpen: (item: T, event: ReactMouseEvent<HTMLButtonElement>) => void;
   onSelect: (id: string, event: ReactMouseEvent<HTMLButtonElement>) => void;
 };
@@ -815,7 +816,7 @@ function GallerySurfaceCardInner<T extends GallerySurfaceItem>({
           style={{ opacity: hidden ? 0 : 1 }}
         >
           {renderImage ? (
-            renderImage(item, 'h-full w-full object-cover grayscale transition-[filter,transform] duration-300 group-hover:grayscale-0 group-hover:scale-[1.02]')
+            renderImage(item, 'h-full w-full object-cover grayscale transition-[filter,transform] duration-300 group-hover:grayscale-0 group-hover:scale-[1.02]', 'card')
           ) : (
             <img
               src={thumbSrc(item.src)}

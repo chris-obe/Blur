@@ -467,7 +467,7 @@ function AlbumEditablePhotoGrid({
               dragging ? 'opacity-45' : '',
             ].join(' ')}
           >
-            <AccountPhotoImage photo={photo} accessToken={accessToken} ownerKey={ownerKey} className="aspect-square w-full object-cover" />
+            <AccountPhotoImage photo={photo} accessToken={accessToken} ownerKey={ownerKey} className="aspect-square w-full object-cover" size="thumb" />
             <SelectionPill
               selected={selected}
               label={`Select ${photo.title}`}

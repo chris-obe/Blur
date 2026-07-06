@@ -71,6 +71,20 @@ export async function processGalleryUploadImage(
   throw new Error('Could not compress image under 1 MB.');
 }
 
+export async function generateGalleryThumbnailFile(
+  source: Blob,
+  sourceName = 'gallery-photo',
+): Promise<File> {
+  const bitmap = await createBitmap(source);
+  try {
+    const thumb = await encodeThumb(bitmap, sourceName);
+    if (!thumb) throw new Error('Could not create thumbnail under 256 KB.');
+    return thumb;
+  } finally {
+    bitmap.close?.();
+  }
+}
+
 function progress(
   onProgress: ProgressCallback | undefined,
   stage: ImageProcessingStage,
@@ -80,7 +94,7 @@ function progress(
   onProgress?.({ stage, label, percent });
 }
 
-async function createBitmap(file: File): Promise<ImageBitmap> {
+async function createBitmap(file: Blob): Promise<ImageBitmap> {
   if ('createImageBitmap' in window) return createImageBitmap(file, { imageOrientation: 'from-image' });
 
   const url = URL.createObjectURL(file);

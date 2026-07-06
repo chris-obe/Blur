@@ -135,6 +135,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, params, request
   if (!current) return json({ error: 'photo not found' }, { status: 404 });
 
   await env.GALLERY_BUCKET.delete(current.object_key);
+  if (current.thumb_object_key) await env.GALLERY_BUCKET.delete(current.thumb_object_key);
   await env.GALLERY_DB.prepare('DELETE FROM gallery_photos WHERE id = ?').bind(id).run();
   return json({ ok: true });
 };

@@ -378,13 +378,14 @@ export function GalleryPage({ albumSlug, initialPhotoId, closePath }: GalleryPag
             onAdd: () => navigate(`/albums/${encodeURIComponent(ownerAlbum.slug)}?mode=edit`),
             addLabel: 'Upload',
           } : undefined}
-          renderImage={ownerAlbum ? (item, className) => (
+          renderImage={ownerAlbum ? (item, className, context) => (
             <CachedAccountImage
               photo={item}
               accessToken={ownerAccessToken}
               ownerKey={ownerKey}
               className={className}
               alt={item.title}
+              size={context === 'card' ? 'thumb' : 'full'}
             />
           ) : undefined}
         />

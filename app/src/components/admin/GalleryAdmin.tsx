@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ImagePlus, Pencil, RotateCcw, Save, Send, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, Check, ImagePlus, Pencil, RotateCcw, Save, Send, Trash2, Upload, X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import {
   deleteAdminGalleryPhoto,
@@ -9,6 +9,11 @@ import {
   type GalleryModerationStatus,
   type GalleryTag,
 } from '../../lib/galleryApi';
+import {
+  missingThumbnailPhotos,
+  regenerateAdminThumbnails,
+  type ThumbnailRegenerationProgress,
+} from '../../lib/galleryThumbnails';
 import {
   GALLERY_UPLOAD_MAX_BYTES,
   GALLERY_UPLOAD_MAX_LONG_EDGE,
@@ -61,6 +66,7 @@ export function GalleryAdmin({ accessToken, photos, loading, loaded, error, tags
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
   const [editing, setEditing] = useState<{ id: string; row: PhotoMetadataRow } | null>(null);
   const [processing, setProcessing] = useState<ImageProcessingProgress | null>(null);
+  const [thumbnailProgress, setThumbnailProgress] = useState<ThumbnailRegenerationProgress | null>(null);
   const uploadQueueRef = useRef<UploadQueueItem[]>([]);
 
   useEffect(() => {
@@ -87,6 +93,7 @@ export function GalleryAdmin({ accessToken, photos, loading, loaded, error, tags
     );
   }, [photos]);
   const reviewCount = useMemo(() => photos.filter((photo) => photo.galleryStatusNeedsReview).length, [photos]);
+  const missingThumbnails = useMemo(() => missingThumbnailPhotos(photos), [photos]);
 
   const activeTags = useMemo(() => tags.filter((tag) => !tag.archived), [tags]);
   const uploadRows = useMemo(() => uploadQueue.map((item) => item.row), [uploadQueue]);
@@ -230,6 +237,19 @@ export function GalleryAdmin({ accessToken, photos, loading, loaded, error, tags
     }
   };
 
+  const regenerateMissingThumbnails = async () => {
+    if (missingThumbnails.length === 0) return;
+    setThumbnailProgress(null);
+    try {
+      await regenerateAdminThumbnails(missingThumbnails, accessToken, setThumbnailProgress);
+      await onReload();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Thumbnail generation failed');
+    } finally {
+      setThumbnailProgress(null);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -251,6 +271,44 @@ export function GalleryAdmin({ accessToken, photos, loading, loaded, error, tags
           Reload gallery
         </Button>
       </div>
+
+      {missingThumbnails.length > 0 && (
+        <section className="border border-line bg-faint p-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-w-0 gap-3">
+              <AlertTriangle size={16} strokeWidth={1.5} className="mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <div className="text-sm font-bold tracking-tight">Missing grid thumbnails</div>
+                <div className="mt-1 text-xs text-muted">
+                  {missingThumbnails.length} photo{missingThumbnails.length === 1 ? '' : 's'} will fall back to full-size image objects in grids.
+                </div>
+              </div>
+            </div>
+            <Button
+              type="button"
+              onClick={() => void regenerateMissingThumbnails()}
+              disabled={uploading || readingExif || !!thumbnailProgress}
+            >
+              <ImagePlus size={14} strokeWidth={1.5} />
+              Generate thumbnails
+            </Button>
+          </div>
+          {thumbnailProgress && (
+            <div className="mt-3 text-xs">
+              <div className="mb-1 flex justify-between gap-3 text-muted">
+                <span>{thumbnailProgress.label}</span>
+                <span>{thumbnailProgress.current}/{thumbnailProgress.total}</span>
+              </div>
+              <div className="h-1.5 w-full bg-line">
+                <div
+                  className="h-full bg-fg transition-all"
+                  style={{ width: `${Math.round((thumbnailProgress.current / thumbnailProgress.total) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="border border-line p-3">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
@@ -463,7 +521,9 @@ function AuthenticatedThumbnail({ photo, accessToken }: { photo: AdminGalleryPho
   useEffect(() => {
     let cancelled = false;
     let objectUrl: string | null = null;
-    const imageSrc = photo.galleryStatus === 'approved' ? `/api/gallery/photos/${photo.id}/image` : photo.src;
+    const imageSrc = photo.galleryStatus === 'approved'
+      ? `/api/gallery/photos/${photo.id}/image?size=thumb`
+      : `${photo.src}${photo.src.includes('?') ? '&' : '?'}size=thumb`;
     const headers = new Headers({ accept: photo.contentType ?? 'image/*' });
     if (photo.galleryStatus !== 'approved' && accessToken) headers.set('authorization', `Bearer ${accessToken}`);
 
