@@ -1,29 +1,24 @@
 import { useEffect, useMemo } from 'react';
-import { GALLERY_SEED } from '../data/gallery.seed';
 import type { GalleryItem } from '../lib/types';
 import { useReactions } from '../store/ReactionsProvider';
 import { useGalleryPhotosQuery } from './queries';
 
 interface UsePublicGalleryPhotosOptions {
   enabled?: boolean;
-  fallbackToSeed?: boolean;
 }
 
-// Thin adapter over the shared gallery query: keeps the seed-fallback and
-// reaction-count registration behaviour, while React Query provides caching
-// so multiple surfaces (gallery, suggestions, compare examples) share one fetch.
+// Thin adapter over the shared gallery query: React Query provides caching so
+// multiple surfaces (gallery, suggestions, compare examples) share one fetch.
 export function usePublicGalleryPhotos({
   enabled = true,
-  fallbackToSeed = true,
 }: UsePublicGalleryPhotosOptions = {}) {
   const { registerCounts } = useReactions();
   const query = useGalleryPhotosQuery(enabled);
 
   const photos: GalleryItem[] = useMemo(() => {
     if (query.data?.length) return query.data;
-    if (query.isPending && !fallbackToSeed) return [];
-    return fallbackToSeed ? GALLERY_SEED : [];
-  }, [query.data, query.isPending, fallbackToSeed]);
+    return [];
+  }, [query.data]);
 
   useEffect(() => {
     if (!enabled) return;
