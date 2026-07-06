@@ -401,13 +401,14 @@ function GallerySurfaceToolbar({
 }) {
   const [compactFilterOpen, setCompactFilterOpen] = useState(false);
   const [compactFilterCategory, setCompactFilterCategory] = useState<CompactFilterCategory>('format');
+  const compact = filterMode === 'compact';
 
   return (
     <div className="sticky top-0 z-30 border-b border-line bg-bg/95 backdrop-blur">
       <div className="flex flex-col gap-3 px-6 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className={compact ? 'flex min-w-0 items-center justify-between gap-3' : 'flex flex-wrap items-center justify-between gap-3'}>
           {enableFilters
-            ? filterMode === 'compact'
+            ? compact
               ? (
                 <CompactFilterMenu
                   open={compactFilterOpen}
@@ -430,7 +431,7 @@ function GallerySurfaceToolbar({
               )
               : <FormatFilter selected={formats} onToggle={toggleFormat} />
             : <span className="label">Images</span>}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className={compact ? 'flex shrink-0 items-center gap-2' : 'flex flex-wrap items-center gap-2'}>
             {ownerControls?.visibility && (
               <GalleryVisibilityDropdown
                 value={ownerControls.visibility.value}
@@ -461,28 +462,30 @@ function GallerySurfaceToolbar({
             <span className="label">{resultCount} images</span>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className={compact ? 'flex min-w-0 items-center justify-between gap-3' : 'flex flex-wrap items-center justify-between gap-3'}>
           {enableFilters
-            ? filterMode === 'compact'
+            ? compact
               ? (
-                <CompactFilterChips
-                  formats={formats}
-                  onToggleFormat={toggleFormat}
-                  tags={tags}
-                  onRemoveTag={removeTag}
-                  focals={focals}
-                  onToggleFocal={toggleFocal}
-                  apertures={apertures}
-                  onToggleAperture={toggleAperture}
-                  onOpenCategory={(nextCategory) => {
-                    setCompactFilterCategory(nextCategory);
-                    setCompactFilterOpen(true);
-                  }}
-                />
+                <div className="min-w-0 flex-1 overflow-x-auto">
+                  <CompactFilterChips
+                    formats={formats}
+                    onToggleFormat={toggleFormat}
+                    tags={tags}
+                    onRemoveTag={removeTag}
+                    focals={focals}
+                    onToggleFocal={toggleFocal}
+                    apertures={apertures}
+                    onToggleAperture={toggleAperture}
+                    onOpenCategory={(nextCategory) => {
+                      setCompactFilterCategory(nextCategory);
+                      setCompactFilterOpen(true);
+                    }}
+                  />
+                </div>
               )
               : <TagSearch tags={tags} allTags={allTags} onAdd={addTag} onRemove={removeTag} />
             : <span />}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className={compact ? 'flex shrink-0 items-center gap-1.5' : 'flex flex-wrap items-center gap-1.5'}>
             {toolbarExtras}
             {selection && (
               <TextButton active={allSelected} onClick={onSelectAll} label={allSelected ? 'Clear selection' : 'Select all'}>
@@ -706,9 +709,9 @@ function CompactFilterChips({
 }) {
   const formatChips = CATEGORIES.filter((item) => formats.has(item.id));
   const hasFilters = formatChips.length > 0 || tags.length > 0 || focals.size > 0 || apertures.size > 0;
-  if (!hasFilters) return <span className="label">No filters</span>;
+  if (!hasFilters) return <span className="label whitespace-nowrap">No filters</span>;
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex w-max items-center gap-2 pr-2">
       {formatChips.map((item) => (
         <Chip key={item.id} active onClick={() => onOpenCategory('format')} onRemove={() => onToggleFormat(item.id)}>
           {item.label}
