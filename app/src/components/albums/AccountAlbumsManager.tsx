@@ -1,8 +1,10 @@
 import {
   useEffect,
+  lazy,
   useMemo,
   useRef,
   useState,
+  Suspense,
   type Dispatch,
   type ReactNode,
   type RefObject,
@@ -11,7 +13,7 @@ import {
 import { useAuth0 } from '@auth0/auth0-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronRight, FolderOpen, Plus } from 'lucide-react';
+import { Check, ChevronRight, FolderOpen, Grid3X3, Plus, Rows3, Save, Square, X } from 'lucide-react';
 import { userTokenParams } from '../../auth/config';
 import {
   createAccountGalleryAlbum,
@@ -29,7 +31,7 @@ import {
   type GalleryAlbum,
   type GalleryAlbumStatus,
 } from '../../lib/galleryApi';
-import { usePruneCachedAccountImages } from '../../lib/accountImageCache';
+import { useCachedAccountImageUrls, usePruneCachedAccountImages } from '../../lib/accountImageCache';
 import { suggestGalleryMetadata } from '../../lib/galleryMetadata';
 import {
   GALLERY_UPLOAD_MAX_BYTES,
@@ -40,18 +42,24 @@ import {
 import { DEFAULT_SUBJECT_DISTANCE_PRESET_ID } from '../../lib/subjectDistance';
 import { useCatalog } from '../../store/CatalogProvider';
 import { GallerySurface } from '../gallery/GallerySurface';
-import { normalizedFormatId, type PhotoMetadataCatalog } from '../gallery/metadata/photoMetadataModel';
+import {
+  metadataRowFromPhoto,
+  normalizedFormatId,
+  type PhotoMetadataCatalog,
+  type PhotoMetadataRow,
+} from '../gallery/metadata/photoMetadataModel';
 import { EmbedCodeDialog } from '../embed/EmbedCodeDialog';
 import { PhotoLightbox } from '../lightbox/PhotoLightbox';
 import { Button } from '../ui/Button';
 import { ErrorBanner } from '../ui/ErrorBanner';
 import { AccountLightboxInfo } from './AccountLightboxInfo';
 import { AccountPhotoImage } from './AccountPhotoImage';
-import { AlbumActionBar, SelectionPill } from './AlbumActionBar';
+import { ActionIconButton, ActionTextButton, AlbumActionBar, SelectionPill } from './AlbumActionBar';
 import { AlbumCard } from './AlbumCard';
-import { UploadProgress } from './AlbumDropZone';
+import { AlbumDropZone, UploadProgress } from './AlbumDropZone';
 import { AlbumEditWorkspace } from './AlbumEditWorkspace';
 import { AlbumNav } from './AlbumNav';
+import { AlbumOptionsRail } from './AlbumOptionsRail';
 import { AlbumPreferencesPanel } from './AlbumPreferencesPanel';
 import {
   EMPTY_ALBUM,
@@ -65,16 +73,20 @@ import {
   photoUpdatePayload,
   readAlbumPreferences,
   replaceAlbum,
+  toggleSetValue,
   updatePhotoSelection,
   writeAlbumPreferences,
   type AlbumDefaultMode,
   type AlbumDisplayPreferences,
   type AlbumDraft,
+  type AlbumEditSurface,
   type AlbumMutation,
   type AlbumPhotoView,
   type PhotoDraft,
 } from './albumModel';
-import { ALBUM_MODE_EASE, albumModeVariants, useAlbumModeDirection } from './albumMotion';
+import { ALBUM_MODE_EASE } from './albumMotion';
+
+const PhotoMetadataGrid = lazy(() => import('../gallery/metadata/PhotoMetadataGrid').then((module) => ({ default: module.PhotoMetadataGrid })));
 
 interface Props {
   mode: 'page' | 'settings';
@@ -834,20 +846,53 @@ function AlbumViewer({
         })
         .filter((photo): photo is AlbumPhotoView => photo != null)
     : [];
-  const visiblePhotoIds = selectedAlbum ? selectedAlbumPhotos.map((photo) => photo.id) : pageSurface === 'all' ? photos.map((photo) => photo.id) : [];
+  const editing = detailMode === 'edit';
+  const [editorSurface, setEditorSurface] = useState<AlbumEditSurface>('photos');
+  const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
+  const detailItems = editing ? albumPhotos : selectedAlbumPhotos;
+  const visiblePhotoIds = selectedAlbum ? detailItems.map((photo) => photo.id) : pageSurface === 'all' ? photos.map((photo) => photo.id) : [];
   const allVisibleSelected = visiblePhotoIds.length > 0 && visiblePhotoIds.every((id) => selectedPhotoIds.has(id));
-  const selectedAlbumScopedPhotos = selectedAlbumPhotos.filter((photo) => selectedPhotoIds.has(photo.id));
+  const selectedAlbumScopedPhotos = detailItems.filter((photo) => selectedPhotoIds.has(photo.id));
   const selectedLibraryPhotos = photos.filter((photo) => selectedPhotoIds.has(photo.id));
   const selectedPhotos = selectedAlbum ? selectedAlbumScopedPhotos : selectedLibraryPhotos;
   const selectedVisibleAlbumCount = selectedAlbum
     ? selectedAlbumScopedPhotos.filter((photo) => photo.visibility === 'visible').length
     : 0;
-  const selectedPendingGalleryCount = selectedPhotos.filter((photo) => photo.galleryStatus === 'pending').length;
   const selectedEmbeddableCount = selectedAlbum
     ? selectedAlbum.status === 'published' && !selectedAlbum.hasPassword
       ? selectedAlbumScopedPhotos.filter((photo) => photo.visibility === 'visible').length
       : 0
     : selectedGalleryApprovedCount;
+  const selectedPendingGalleryCount = selectedPhotos.filter((photo) => photo.galleryStatus === 'pending').length;
+  const allAlbumPhotosSelected = detailItems.length > 0 && detailItems.every((photo) => selectedPhotoIds.has(photo.id));
+  const previewUrls = useCachedAccountImageUrls(albumPhotos, accessToken, ownerKey);
+  const metadataRows = useMemo(
+    () => albumPhotos.map((photo) => ({
+      ...metadataRowFromPhoto(photo, {
+        ...(photoDrafts[photo.id] ?? {}),
+        id: photo.id,
+        previewSrc: previewUrls[photo.id] ?? (photo.src?.startsWith('/api/gallery/') ? photo.src : undefined),
+        previewLabel: photo.title,
+        albumVisibility: photo.visibility,
+        galleryStatus: photo.galleryStatus,
+      }),
+    })),
+    [albumPhotos, photoDrafts, previewUrls],
+  );
+
+  const setMetadataRows = (rows: PhotoMetadataRow[]) => {
+    setDrafts((current) => ({
+      ...current,
+      ...Object.fromEntries(rows.map((row) => [row.id, row])),
+    }));
+    setAlbumDraft((current) => ({
+      ...current,
+      photos: current.photos.map((item) => {
+        const row = rows.find((entry) => entry.id === item.photoId);
+        return row ? { ...item, visibility: row.albumVisibility ?? item.visibility } : item;
+      }),
+    }));
+  };
 
   const setAllVisible = (checked: boolean) => {
     setSelectedPhotoIds(checked ? new Set(visiblePhotoIds) : new Set());
@@ -868,38 +913,88 @@ function AlbumViewer({
     setSelectionAnchorId(anchor);
   };
 
+  const setAllAlbumPhotosSelected = (checked: boolean) => {
+    setSelectedPhotoIds(checked ? new Set(detailItems.map((photo) => photo.id)) : new Set());
+    setSelectionAnchorId(checked ? detailItems[0]?.id ?? null : null);
+  };
+
+  const removePhotoFromAlbum = (photoId: string) => {
+    setAlbumDraft((current) => ({
+      ...current,
+      photos: current.photos.filter((item) => item.photoId !== photoId),
+      coverPhotoId: current.coverPhotoId === photoId ? '' : current.coverPhotoId,
+    }));
+    setSelectedPhotoIds((current) => toggleSetValue(current, photoId, false));
+  };
+
+  const reorderAlbumPhoto = (photoId: string, targetPhotoId: string) => {
+    if (photoId === targetPhotoId) return;
+    setAlbumDraft((current) => {
+      const nextPhotos = [...current.photos];
+      const from = nextPhotos.findIndex((item) => item.photoId === photoId);
+      const to = nextPhotos.findIndex((item) => item.photoId === targetPhotoId);
+      if (from < 0 || to < 0) return current;
+      const [moved] = nextPhotos.splice(from, 1);
+      if (!moved) return current;
+      nextPhotos.splice(to, 0, moved);
+      return { ...current, photos: nextPhotos };
+    });
+  };
+
+  const stageSelectedAlbumPhotoVisibility = (visibility: GalleryAlbumPhotoVisibility) => {
+    if (!selectedAlbum || selectedPhotoIds.size === 0) return;
+    setAlbumDraft((current) => ({
+      ...current,
+      photos: current.photos.map((photo) => (
+        selectedPhotoIds.has(photo.photoId)
+          ? { ...photo, visibility }
+          : photo
+      )),
+    }));
+  };
+
+  useEffect(() => {
+    if (!editing || !selectedAlbum) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName.toLowerCase();
+      const isTyping = tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable;
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        void saveAlbum();
+        return;
+      }
+      if (isTyping) return;
+
+      if (event.key.toLowerCase() === 'u') {
+        event.preventDefault();
+        fileInputRef.current?.click();
+      } else if (event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        setAllAlbumPhotosSelected(true);
+      } else if (event.key === 'Escape') {
+        setSelectedPhotoIds(new Set());
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [detailItems, editing, fileInputRef, saveAlbum, selectedAlbum]);
+
   const updateVisibility = async (status: GalleryAlbumStatus) => {
     if (!selectedAlbum || busy) return;
     await patchAlbum(selectedAlbum.slug, { status });
     await reload();
   };
 
-  const updateSelectedAlbumPhotoVisibility = async (visibility: GalleryAlbumPhotoVisibility) => {
-    if (!selectedAlbum || busy || selectedPhotos.length === 0) return;
-    await patchAlbum(selectedAlbum.slug, {
-      photos: selectedAlbum.photos.map((photo) => ({
-        photoId: photo.photoId,
-        caption: photo.caption ?? null,
-        visibility: selectedPhotoIds.has(photo.id) ? visibility : photo.visibility,
-      })),
-    });
-    setSelectedPhotoIds(new Set());
-    setSelectionAnchorId(null);
-  };
-  const modeDirection = useAlbumModeDirection(detailMode);
   const reducedMotion = useReducedMotion();
-  const modeMotionProps = reducedMotion
-    ? {
-        initial: false,
-        animate: { opacity: 1, x: 0 },
-        exit: { opacity: 0 },
-        transition: { duration: 0.01 },
-      }
+  const railMotion = (side: 'left' | 'right') => reducedMotion
+    ? { initial: false }
     : {
-        variants: albumModeVariants(modeDirection),
-        initial: 'enter',
-        animate: 'center',
-        exit: 'exit',
+        initial: { opacity: 0, x: side === 'left' ? -18 : 18 },
+        animate: { opacity: 1, x: 0, transition: { duration: 0.24, ease: ALBUM_MODE_EASE } },
+        exit: { opacity: 0, x: side === 'left' ? -12 : 12, transition: { duration: 0.16, ease: ALBUM_MODE_EASE } },
       };
 
   if (albums.length === 0 && photos.length === 0) {
@@ -924,11 +1019,38 @@ function AlbumViewer({
   }
 
   if (selectedAlbum) {
+    const headerTitle = editing ? albumDraft.title || selectedAlbum.title : selectedAlbum.title;
+    const headerDescription = editing ? albumDraft.description || selectedAlbum.description : selectedAlbum.description;
+    const detailsSlot = editing && editorSurface === 'details' ? (
+      <section className="p-6">
+        <div className="mb-3">
+          <div className="text-sm font-bold">Photo details</div>
+          <div className="label mt-1">Bulk spreadsheet edits stay staged until Save.</div>
+        </div>
+        <Suspense fallback={<div className="border border-line bg-faint px-3 py-8 text-center text-xs text-muted">Loading metadata grid...</div>}>
+          <PhotoMetadataGrid
+            rows={metadataRows}
+            context="album"
+            catalog={catalog}
+            onRowsChange={setMetadataRows}
+            selectedRowIds={selectedPhotoIds}
+            onSelectedRowIdsChange={(ids) => {
+              setSelectedPhotoIds(ids);
+              setSelectionAnchorId(ids.values().next().value ?? null);
+            }}
+            readonlyColumns={['galleryStatus']}
+            minHeight={360}
+            maxHeight={760}
+          />
+        </Suspense>
+      </section>
+    ) : undefined;
+
     return (
-      <div className="space-y-5">
+      <div className="flex h-full min-h-0 flex-col gap-5">
         {error && <ErrorBanner message={error} />}
         {progress && <UploadProgress progress={progress} />}
-        <div className="space-y-4 border-b border-line pb-4">
+        <div className="shrink-0 space-y-4 border-b border-line pb-4">
           <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted">
             <button
               type="button"
@@ -942,100 +1064,30 @@ function AlbumViewer({
               ALBUMS
             </button>
             <ChevronRight size={12} strokeWidth={1.5} />
-            <span className="text-fg">{selectedAlbum.title.toUpperCase()}</span>
+            <span className="text-fg">{headerTitle.toUpperCase()}</span>
           </div>
 
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0">
-              <h3 className="truncate text-3xl font-bold tracking-tight">{selectedAlbum.title}</h3>
+              <h3 className="truncate text-3xl font-bold tracking-tight">{headerTitle}</h3>
             </div>
           </div>
 
-          {selectedAlbum.description && <p className="max-w-3xl text-sm text-muted">{selectedAlbum.description}</p>}
+          {headerDescription && <p className="max-w-3xl text-sm text-muted">{headerDescription}</p>}
         </div>
 
-        <AnimatePresence initial={false} mode="wait">
-          {detailMode === 'view' ? (
-            <motion.div key="album-view" {...modeMotionProps} className="space-y-5">
-              <GallerySurface
-                items={selectedAlbumPhotos}
-                enableReactions={false}
-                emptyMessage="No photos in this album yet."
-                selection={{
-                  selectedIds: selectedPhotoIds,
-                  anchorId: selectionAnchorId,
-                  onChange: (ids, anchorId) => {
-                    setSelectedPhotoIds(ids);
-                    setSelectionAnchorId(anchorId);
-                  },
-                  primaryActionLabel: 'Show in public album',
-                  secondaryActionLabel: 'Hide from public album',
-                  selectedSecondaryCount: selectedVisibleAlbumCount,
-                  selectedEmbeddableCount,
-                  embedReady,
-                  embedSelectedLabel: selectedPhotoIds.size > 0 && selectedEmbeddableCount === 0
-                    ? 'Only visible photos in a public album can be embedded'
-                    : 'Embed selected',
-                  onPrimaryAction: () => void updateSelectedAlbumPhotoVisibility('visible'),
-                  onSecondaryAction: () => void updateSelectedAlbumPhotoVisibility('hidden'),
-                  onEmbedSelected: () => onEmbedSelected({
-                    photoIds: selectedAlbumScopedPhotos.filter((photo) => photo.visibility === 'visible').map((photo) => photo.id),
-                    albumSlug: selectedAlbum.slug,
-                    albumTitle: selectedAlbum.title,
-                  }),
-                }}
-                ownerControls={{
-                  visibility: {
-                    value: selectedAlbum.status,
-                    busy,
-                    onChange: (status) => void updateVisibility(status),
-                  },
-                  mode: {
-                    value: detailMode,
-                    onView: () => setDetailMode('view'),
-                    onEdit: () => setDetailMode('edit'),
-                  },
-                  canEmbedAlbum: embedReady && selectedAlbum.status === 'published' && !selectedAlbum.hasPassword,
-                  embedAlbumDisabledReason: selectedAlbum.hasPassword
-                    ? 'Password-protected albums are not embeddable'
-                    : selectedAlbum.status === 'published'
-                      ? 'Embed settings are still loading'
-                      : 'Make the album public to embed it',
-                  onEmbedAlbum: () => onEmbedAlbum(selectedAlbum),
-                  onReload: () => void reload(),
-                  onAdd: () => fileInputRef.current?.click(),
-                  addLabel: 'Upload',
-                }}
-                renderImage={(photo, className) => (
-                  <AccountPhotoImage photo={photo} accessToken={accessToken} ownerKey={ownerKey} className={className} />
-                )}
-                renderInfo={(photo, { close }) => (
-                  <AccountLightboxInfo
-                    photo={photo}
-                    busy={busy}
-                    canEmbed={selectedAlbum.status === 'published' && !selectedAlbum.hasPassword && photo.visibility === 'visible'}
-                    onEdit={() => {
-                      close();
-                      setDetailMode('edit');
-                    }}
-                    onPublish={() => void publishOne(photo.id)}
-                    onEmbed={() => onEmbedPhoto(photo, selectedAlbum.slug)}
-                    embedReady={embedReady}
-                  />
-                )}
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="album-edit"
-              {...modeMotionProps}
-              className="grid min-h-0 gap-4 xl:grid-cols-[14rem_minmax(0,1fr)_18rem] xl:items-start"
-            >
+        <div
+          className={[
+            'grid min-h-0 flex-1 gap-4 overflow-hidden',
+            editing ? 'xl:grid-cols-[14rem_minmax(0,1fr)_18rem]' : 'xl:grid-cols-[minmax(0,1fr)]',
+          ].join(' ')}
+        >
+          <AnimatePresence initial={false}>
+            {editing && (
               <motion.aside
-                className="space-y-3 xl:sticky xl:top-0"
-                initial={reducedMotion ? false : { opacity: 0, x: -18 }}
-                animate={reducedMotion ? undefined : { opacity: 1, x: 0, transition: { duration: 0.24, ease: ALBUM_MODE_EASE } }}
-                exit={reducedMotion ? undefined : { opacity: 0, x: -12, transition: { duration: 0.16, ease: ALBUM_MODE_EASE } }}
+                key="album-detail-nav"
+                className="min-h-0 space-y-3 xl:h-full xl:overflow-y-auto xl:[scrollbar-gutter:stable]"
+                {...railMotion('left')}
               >
                 <AlbumNav
                   albums={albums}
@@ -1045,38 +1097,180 @@ function AlbumViewer({
                   onNewAlbum={startNewAlbum}
                 />
               </motion.aside>
-              <AlbumEditWorkspace
-                availablePhotos={availablePhotos}
-                albumPhotos={albumPhotos}
-                photos={photos}
-                selectedAlbumSlug={selectedAlbum.slug}
-                selectedPhotoIds={selectedPhotoIds}
-                selectionAnchorId={selectionAnchorId}
-                albumDraft={albumDraft}
-                photoDrafts={photoDrafts}
-                catalog={catalog}
-                accessToken={accessToken}
-                ownerKey={ownerKey}
-                fileInputRef={fileInputRef}
-                loading={loading}
-                busy={busy}
-                setAlbumDraft={setAlbumDraft}
-                setDrafts={setDrafts}
-                setSelectedPhotoIds={setSelectedPhotoIds}
-                setSelectionAnchorId={setSelectionAnchorId}
-                uploadFiles={uploadFiles}
-                saveAlbum={saveAlbum}
-                submitSelectedToGallery={submitSelectedToGallery}
-                withdrawSelectedFromGallery={withdrawSelectedFromGallery}
-                reload={reload}
-                editorClass="min-w-0 space-y-5"
-                optionsClass="space-y-4"
-                animated
-                showAlbumFields={false}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+          </AnimatePresence>
+
+          <div className="min-h-0 min-w-0 overflow-y-auto [scrollbar-gutter:stable]">
+            <GallerySurface
+              items={detailItems}
+              enableReactions={false}
+              emptyMessage="No photos in this album yet."
+              selection={editing ? {
+                selectedIds: selectedPhotoIds,
+                anchorId: selectionAnchorId,
+                onChange: (ids, anchorId) => {
+                  setSelectedPhotoIds(ids);
+                  setSelectionAnchorId(anchorId);
+                },
+                primaryActionLabel: 'Show in public album',
+                secondaryActionLabel: 'Hide from public album',
+                selectedSecondaryCount: selectedVisibleAlbumCount,
+                selectedEmbeddableCount,
+                embedReady,
+                embedSelectedLabel: selectedPhotoIds.size > 0 && selectedEmbeddableCount === 0
+                  ? 'Only visible photos in a public album can be embedded'
+                  : 'Embed selected',
+                onPrimaryAction: () => stageSelectedAlbumPhotoVisibility('visible'),
+                onSecondaryAction: () => stageSelectedAlbumPhotoVisibility('hidden'),
+                onEmbedSelected: () => onEmbedSelected({
+                  photoIds: selectedAlbumScopedPhotos.filter((photo) => photo.visibility === 'visible').map((photo) => photo.id),
+                  albumSlug: selectedAlbum.slug,
+                  albumTitle: selectedAlbum.title,
+                }),
+              } : undefined}
+              ownerControls={{
+                visibility: {
+                  value: editing ? albumDraft.status : selectedAlbum.status,
+                  busy,
+                  onChange: (status) => {
+                    if (editing) setAlbumDraft((current) => ({ ...current, status }));
+                    else void updateVisibility(status);
+                  },
+                },
+                mode: {
+                  value: detailMode,
+                  onView: () => setDetailMode('view'),
+                  onEdit: () => setDetailMode('edit'),
+                },
+                canEmbedAlbum: embedReady && selectedAlbum.status === 'published' && !selectedAlbum.hasPassword,
+                embedAlbumDisabledReason: selectedAlbum.hasPassword
+                  ? 'Password-protected albums are not embeddable'
+                  : selectedAlbum.status === 'published'
+                    ? 'Embed settings are still loading'
+                    : 'Make the album public to embed it',
+                onEmbedAlbum: () => onEmbedAlbum(selectedAlbum),
+                onReload: () => void reload(),
+                onAdd: () => fileInputRef.current?.click(),
+                addLabel: 'Upload',
+              }}
+              toolbarExtras={editing ? (
+                <>
+                  <div className="mr-1 flex border border-line">
+                    <ActionIconButton label="Arrange photos" active={editorSurface === 'photos'} onClick={() => setEditorSurface('photos')}>
+                      <Grid3X3 size={14} strokeWidth={1.5} />
+                    </ActionIconButton>
+                    <ActionIconButton label="Edit details" active={editorSurface === 'details'} onClick={() => setEditorSurface('details')}>
+                      <Rows3 size={14} strokeWidth={1.5} />
+                    </ActionIconButton>
+                  </div>
+                  {detailItems.length > 0 && (
+                    <ActionTextButton
+                      label={allAlbumPhotosSelected ? 'Clear photo selection' : 'Select all album photos'}
+                      active={allAlbumPhotosSelected}
+                      onClick={() => setAllAlbumPhotosSelected(!allAlbumPhotosSelected)}
+                    >
+                      {allAlbumPhotosSelected ? <Check size={13} strokeWidth={1.7} /> : <Square size={13} strokeWidth={1.6} />}
+                      Select all
+                    </ActionTextButton>
+                  )}
+                  <Button variant="solid" className="h-9" onClick={() => void saveAlbum()} disabled={busy || !albumDraft.title.trim()}>
+                    <Save size={14} strokeWidth={1.5} />
+                    Save
+                  </Button>
+                </>
+              ) : undefined}
+              uploadSlot={editing && editorSurface === 'photos' ? (
+                <div className="px-6 pt-6">
+                  <AlbumDropZone
+                    empty={albumPhotos.length === 0}
+                    busy={busy}
+                    onChoose={() => fileInputRef.current?.click()}
+                    onFiles={(files) => void uploadFiles(files)}
+                  />
+                </div>
+              ) : undefined}
+              contentSlot={detailsSlot}
+              showCardDetails={editing || preferences.showPhotoTitles}
+              cardDecorations={editing && editorSurface === 'photos' ? (photo, index) => (
+                <>
+                  <div className="absolute bottom-2 left-2 z-10 border border-line bg-surface/90 px-1.5 py-1 text-[10px] uppercase tracking-wide">
+                    {String(index + 1).padStart(2, '0')}
+                  </div>
+                  {albumDraft.coverPhotoId === photo.id && (
+                    <div className="absolute bottom-2 right-2 z-10 border border-line bg-surface/90 px-1.5 py-1 text-[10px] uppercase tracking-wide">
+                      Cover
+                    </div>
+                  )}
+                </>
+              ) : undefined}
+              cardActions={editing && editorSurface === 'photos' ? (photo) => (
+                <button
+                  type="button"
+                  onClick={() => removePhotoFromAlbum(photo.id)}
+                  className="absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center border border-line bg-surface/90 opacity-100 transition-opacity hover:border-line-strong md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                  aria-label={`Remove ${photo.title}`}
+                >
+                  <X size={13} strokeWidth={1.5} />
+                </button>
+              ) : undefined}
+              cardDrag={editing && editorSurface === 'photos' ? {
+                draggedId: draggedPhotoId,
+                enabled: () => albumPhotos.length > 1,
+                onDragStart: (photo) => setDraggedPhotoId(photo.id),
+                onDrop: (draggedId, target) => {
+                  reorderAlbumPhoto(draggedId, target.id);
+                  setDraggedPhotoId(null);
+                },
+                onDragEnd: () => setDraggedPhotoId(null),
+              } : undefined}
+              renderImage={(photo, className) => (
+                <AccountPhotoImage photo={photo} accessToken={accessToken} ownerKey={ownerKey} className={className} />
+              )}
+              renderInfo={(photo, { close }) => (
+                <AccountLightboxInfo
+                  photo={photo}
+                  busy={busy}
+                  canEmbed={selectedAlbum.status === 'published' && !selectedAlbum.hasPassword && photo.visibility === 'visible'}
+                  onEdit={() => {
+                    close();
+                    setDetailMode('edit');
+                  }}
+                  onPublish={() => void publishOne(photo.id)}
+                  onEmbed={() => onEmbedPhoto(photo, selectedAlbum.slug)}
+                  embedReady={embedReady}
+                />
+              )}
+            />
+          </div>
+
+          <AnimatePresence initial={false}>
+            {editing && (
+              <motion.div
+                key="album-detail-options"
+                className="min-h-0 xl:h-full xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]"
+                {...railMotion('right')}
+              >
+                <AlbumOptionsRail
+                  availablePhotos={availablePhotos}
+                  albumPhotos={albumPhotos}
+                  photos={photos}
+                  selectedAlbumSlug={selectedAlbum.slug}
+                  selectedPhotoIds={selectedPhotoIds}
+                  albumDraft={albumDraft}
+                  loading={loading}
+                  busy={busy}
+                  selectedPendingGalleryCount={selectedPendingGalleryCount}
+                  showDetailsFields
+                  setAlbumDraft={setAlbumDraft}
+                  saveAlbum={saveAlbum}
+                  submitSelectedToGallery={submitSelectedToGallery}
+                  withdrawSelectedFromGallery={withdrawSelectedFromGallery}
+                  reload={reload}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     );
   }
@@ -1203,4 +1397,3 @@ function AlbumViewer({
     </div>
   );
 }
-

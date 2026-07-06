@@ -80,6 +80,18 @@ interface Props<T extends GallerySurfaceItem> {
   enableFilters?: boolean;
   enableReactions?: boolean;
   uploadSlot?: ReactNode;
+  toolbarExtras?: ReactNode;
+  contentSlot?: ReactNode;
+  showCardDetails?: boolean;
+  cardDecorations?: (item: T, index: number) => ReactNode;
+  cardActions?: (item: T) => ReactNode;
+  cardDrag?: {
+    draggedId: string | null;
+    enabled?: (item: T) => boolean;
+    onDragStart: (item: T) => void;
+    onDrop: (draggedId: string, target: T) => void;
+    onDragEnd: () => void;
+  };
   selection?: GallerySelectionConfig;
   ownerControls?: GalleryOwnerControls;
   activePhotoId?: string | null;
@@ -129,6 +141,12 @@ export function GallerySurface<T extends GallerySurfaceItem>({
   enableFilters = true,
   enableReactions = true,
   uploadSlot,
+  toolbarExtras,
+  contentSlot,
+  showCardDetails = true,
+  cardDecorations,
+  cardActions,
+  cardDrag,
   selection,
   ownerControls,
   activePhotoId,
@@ -246,25 +264,33 @@ export function GallerySurface<T extends GallerySurfaceItem>({
         selectedCount={selectedCount}
         selection={selection}
         ownerControls={ownerControls}
+        toolbarExtras={toolbarExtras}
         onSelectAll={setAllVisible}
       />
 
       {uploadSlot}
 
-      {filtered.length === 0 ? (
+      {contentSlot ? (
+        contentSlot
+      ) : filtered.length === 0 ? (
         <div className="flex items-center justify-center px-6 py-20">
           <div className="border border-line px-8 py-10 text-center text-xs text-muted">{emptyMessage}</div>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 p-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {filtered.map((item) => (
+          {filtered.map((item, index) => (
             <GallerySurfaceCard
               key={item.id}
               item={item}
+              index={index}
               hidden={currentActiveId === item.id}
               selected={selection?.selectedIds.has(item.id) ?? false}
               selectable={!!selection}
               enableReactions={enableReactions}
+              showDetails={showCardDetails}
+              cardDecorations={cardDecorations}
+              cardActions={cardActions}
+              cardDrag={cardDrag}
               registerAnchor={registerAnchor}
               renderImage={renderImage}
               onOpen={(event) => openPhoto(item, event.shiftKey)}
@@ -304,6 +330,7 @@ function GallerySurfaceToolbar({
   selectedCount,
   selection,
   ownerControls,
+  toolbarExtras,
   onSelectAll,
 }: {
   enableFilters: boolean;
@@ -318,6 +345,7 @@ function GallerySurfaceToolbar({
   selectedCount: number;
   selection?: GallerySelectionConfig;
   ownerControls?: GalleryOwnerControls;
+  toolbarExtras?: ReactNode;
   onSelectAll: () => void;
 }) {
   return (
@@ -359,6 +387,7 @@ function GallerySurfaceToolbar({
         <div className="flex flex-wrap items-center justify-between gap-3">
           {enableFilters ? <TagSearch tags={tags} allTags={allTags} onAdd={addTag} onRemove={removeTag} /> : <span />}
           <div className="flex flex-wrap items-center gap-1.5">
+            {toolbarExtras}
             {selection && (
               <TextButton active={allSelected} onClick={onSelectAll} label={allSelected ? 'Clear selection' : 'Select all'}>
                 {allSelected ? <Check size={13} strokeWidth={1.7} /> : <Square size={13} strokeWidth={1.6} />}
@@ -406,27 +435,69 @@ function GallerySurfaceToolbar({
 
 function GallerySurfaceCard<T extends GallerySurfaceItem>({
   item,
+  index,
   hidden,
   selected,
   selectable,
   enableReactions,
+  showDetails,
+  cardDecorations,
+  cardActions,
+  cardDrag,
   registerAnchor,
   renderImage,
   onOpen,
   onSelect,
 }: {
   item: T;
+  index: number;
   hidden?: boolean;
   selected: boolean;
   selectable: boolean;
   enableReactions: boolean;
+  showDetails: boolean;
+  cardDecorations?: (item: T, index: number) => ReactNode;
+  cardActions?: (item: T) => ReactNode;
+  cardDrag?: {
+    draggedId: string | null;
+    enabled?: (item: T) => boolean;
+    onDragStart: (item: T) => void;
+    onDrop: (draggedId: string, target: T) => void;
+    onDragEnd: () => void;
+  };
   registerAnchor: (id: string, el: HTMLElement | null) => void;
   renderImage?: (item: T, className: string) => ReactNode;
   onOpen: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   onSelect: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
+  const draggable = !!cardDrag && (cardDrag.enabled ? cardDrag.enabled(item) : true);
+  const dragging = cardDrag?.draggedId === item.id;
+
   return (
-    <div className="group relative flex flex-col border border-line transition-colors hover:border-line-strong">
+    <div
+      className={[
+        'group relative flex flex-col border border-line transition-colors hover:border-line-strong',
+        dragging ? 'opacity-45' : '',
+      ].join(' ')}
+      draggable={draggable}
+      aria-grabbed={dragging || undefined}
+      onDragStart={(event) => {
+        if (!cardDrag || !draggable) return;
+        event.dataTransfer.effectAllowed = 'move';
+        cardDrag.onDragStart(item);
+      }}
+      onDragOver={(event) => {
+        if (!cardDrag?.draggedId || cardDrag.draggedId === item.id) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+      }}
+      onDrop={(event) => {
+        if (!cardDrag?.draggedId) return;
+        event.preventDefault();
+        cardDrag.onDrop(cardDrag.draggedId, item);
+      }}
+      onDragEnd={() => cardDrag?.onDragEnd()}
+    >
       <button type="button" onClick={onOpen} className="block w-full text-left">
         <div
           ref={(el) => registerAnchor(item.id, el)}
@@ -446,6 +517,8 @@ function GallerySurfaceCard<T extends GallerySurfaceItem>({
           )}
         </div>
       </button>
+
+      {cardDecorations?.(item, index)}
 
       {selectable && (
         <button
@@ -468,22 +541,29 @@ function GallerySurfaceCard<T extends GallerySurfaceItem>({
         </div>
       )}
 
+      {cardActions?.(item)}
+
       {item.visibility === 'hidden' && (
-        <div className="absolute bottom-[4.7rem] right-2 z-10 border border-line bg-surface/90 px-1.5 py-1 text-[10px] uppercase tracking-wide">
+        <div className={[
+          'absolute right-2 z-10 border border-line bg-surface/90 px-1.5 py-1 text-[10px] uppercase tracking-wide',
+          showDetails ? 'bottom-[4.7rem]' : 'bottom-2',
+        ].join(' ')}>
           Hidden
         </div>
       )}
 
-      <button type="button" onClick={onOpen} className="flex flex-col gap-1 border-t border-line px-3 py-2 text-left">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-xs font-bold">{item.title}</span>
-          <span className="label shrink-0">f/{item.aperture}</span>
-        </div>
-        <div className="label truncate">
-          {item.camera} · {item.focal}mm
-        </div>
-        <div className="label truncate opacity-70">{formatLabel(item.formatId)}</div>
-      </button>
+      {showDetails && (
+        <button type="button" onClick={onOpen} className="flex flex-col gap-1 border-t border-line px-3 py-2 text-left">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="truncate text-xs font-bold">{item.title}</span>
+            <span className="label shrink-0">f/{item.aperture}</span>
+          </div>
+          <div className="label truncate">
+            {item.camera} · {item.focal}mm
+          </div>
+          <div className="label truncate opacity-70">{formatLabel(item.formatId)}</div>
+        </button>
+      )}
     </div>
   );
 }
