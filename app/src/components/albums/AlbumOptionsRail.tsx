@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { memo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { Globe, Lock, RefreshCw, Save, Send } from 'lucide-react';
 import type { AdminGalleryPhoto, GalleryAlbum } from '../../lib/galleryApi';
 import { Button } from '../ui/Button';
@@ -6,7 +6,7 @@ import { Select } from '../ui/Select';
 import { TextField } from '../ui/TextField';
 import { addPhotosToAlbumDraft, type AlbumDraft, type AlbumPhotoView } from './albumModel';
 
-export function AlbumOptionsRail({
+export const AlbumOptionsRail = memo(function AlbumOptionsRail({
   availablePhotos,
   albumPhotos,
   photos,
@@ -195,7 +195,7 @@ export function AlbumOptionsRail({
       </section>
     </aside>
   );
-}
+});
 
 function VisibilityChoiceButton({
   active,

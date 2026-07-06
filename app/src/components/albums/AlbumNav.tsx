@@ -1,9 +1,10 @@
+import { memo } from 'react';
 import { Plus } from 'lucide-react';
 import type { GalleryAlbum } from '../../lib/galleryApi';
 import { Button } from '../ui/Button';
 import { albumVisibilityLabel } from './albumModel';
 
-export function AlbumNav({
+export const AlbumNav = memo(function AlbumNav({
   albums,
   selectedAlbumSlug,
   listClassName,
@@ -47,4 +48,4 @@ export function AlbumNav({
       </div>
     </>
   );
-}
+});

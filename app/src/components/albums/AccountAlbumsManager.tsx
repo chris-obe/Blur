@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   lazy,
   useMemo,
@@ -130,30 +131,32 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const selectedAlbum = albums.find((album) => album.slug === selectedAlbumSlug) ?? null;
+  const photosById = useMemo(() => new Map(photos.map((photo) => [photo.id, photo])), [photos]);
+  const albumDraftPhotoIds = useMemo(() => new Set(albumDraft.photos.map((photo) => photo.photoId)), [albumDraft.photos]);
   const modeParam = searchParams.get('mode');
   const detailMode: AlbumDefaultMode = modeParam === 'edit' || (!modeParam && preferences.defaultAlbumMode === 'edit') || isNewRoute ? 'edit' : 'view';
   useDocumentTitle(mode === 'page' ? ['Albums', selectedAlbum?.title ?? (isNewRoute ? 'New album' : null)] : ['Settings', 'Albums']);
   const albumPhotos = useMemo(
     () => albumDraft.photos
       .map((item, index) => {
-        const photo = photos.find((entry) => entry.id === item.photoId);
+        const photo = photosById.get(item.photoId);
         return photo ? albumPhotoView(photo, item, index) : null;
       })
       .filter((photo): photo is AlbumPhotoView => photo != null),
-    [albumDraft.photos, photos],
+    [albumDraft.photos, photosById],
   );
   const availablePhotos = useMemo(
-    () => photos.filter((photo) => !albumDraft.photos.some((item) => item.photoId === photo.id)),
-    [albumDraft.photos, photos],
+    () => photos.filter((photo) => !albumDraftPhotoIds.has(photo.id)),
+    [albumDraftPhotoIds, photos],
   );
   const lightboxPhotos = useMemo(() => {
     if (selectedAlbum) {
       return selectedAlbum.photos
-        .map((item) => photos.find((photo) => photo.id === item.id))
+        .map((item) => photosById.get(item.id))
         .filter((photo): photo is AdminGalleryPhoto => !!photo);
     }
     return photos;
-  }, [photos, selectedAlbum]);
+  }, [photos, photosById, selectedAlbum]);
   const lightboxIndex = viewPhotoId ? lightboxPhotos.findIndex((photo) => photo.id === viewPhotoId) : -1;
   const selectedApprovedPhotoIds = useMemo(
     () => photos
@@ -465,7 +468,7 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
     );
   }
 
-  const manager = (
+  const manager = mode === 'settings' || isNewRoute ? (
     <AlbumBuilder
       bounded={mode === 'page'}
       albums={albums}
@@ -497,7 +500,7 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
       withdrawSelectedFromGallery={withdrawSelectedFromGallery}
       reload={load}
     />
-  );
+  ) : null;
 
   const showPageHeader = !(mode === 'page' && selectedAlbum);
 
@@ -888,35 +891,58 @@ function AlbumViewer({
   goToAlbums: () => void;
   openAlbum: (album: GalleryAlbum) => void;
 }) {
-  const selectedAlbumPhotos = selectedAlbum
-    ? selectedAlbum.photos
-        .map((item, index) => {
-          const photo = photos.find((entry) => entry.id === item.id);
-          return photo ? albumPhotoView(photo, item, item.sortOrder ?? index) : null;
-        })
-        .filter((photo): photo is AlbumPhotoView => photo != null)
-    : [];
   const editing = detailMode === 'edit';
+  const photosById = useMemo(() => new Map(photos.map((photo) => [photo.id, photo])), [photos]);
+  const selectedAlbumPhotos = useMemo(
+    () => selectedAlbum
+      ? selectedAlbum.photos
+          .map((item, index) => {
+            const photo = photosById.get(item.id);
+            return photo ? albumPhotoView(photo, item, item.sortOrder ?? index) : null;
+          })
+          .filter((photo): photo is AlbumPhotoView => photo != null)
+      : [],
+    [photosById, selectedAlbum],
+  );
   const [editorSurface, setEditorSurface] = useState<AlbumEditSurface>('photos');
   const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
   const [albumRailOpen, setAlbumRailOpen] = useState(editing);
   const [optionsRailOpen, setOptionsRailOpen] = useState(editing);
-  const drafting = editing || optionsRailOpen;
-  const detailItems = drafting ? albumPhotos : selectedAlbumPhotos;
-  const visiblePhotoIds = selectedAlbum ? detailItems.map((photo) => photo.id) : pageSurface === 'all' ? photos.map((photo) => photo.id) : [];
+  const drafting = editing;
+  const detailItems = useMemo(
+    () => drafting ? albumPhotos : selectedAlbumPhotos,
+    [albumPhotos, drafting, selectedAlbumPhotos],
+  );
+  const visiblePhotoIds = useMemo(
+    () => selectedAlbum ? detailItems.map((photo) => photo.id) : pageSurface === 'all' ? photos.map((photo) => photo.id) : [],
+    [detailItems, pageSurface, photos, selectedAlbum],
+  );
   const allVisibleSelected = visiblePhotoIds.length > 0 && visiblePhotoIds.every((id) => selectedPhotoIds.has(id));
-  const selectedAlbumScopedPhotos = detailItems.filter((photo) => selectedPhotoIds.has(photo.id));
-  const selectedLibraryPhotos = photos.filter((photo) => selectedPhotoIds.has(photo.id));
+  const selectedAlbumScopedPhotos = useMemo(
+    () => detailItems.filter((photo) => selectedPhotoIds.has(photo.id)),
+    [detailItems, selectedPhotoIds],
+  );
+  const selectedLibraryPhotos = useMemo(
+    () => photos.filter((photo) => selectedPhotoIds.has(photo.id)),
+    [photos, selectedPhotoIds],
+  );
   const selectedPhotos = selectedAlbum ? selectedAlbumScopedPhotos : selectedLibraryPhotos;
-  const selectedVisibleAlbumCount = selectedAlbum
-    ? selectedAlbumScopedPhotos.filter((photo) => photo.visibility === 'visible').length
-    : 0;
-  const selectedEmbeddableCount = selectedAlbum
-    ? selectedAlbum.status === 'published' && !selectedAlbum.hasPassword
-      ? selectedAlbumScopedPhotos.filter((photo) => photo.visibility === 'visible').length
-      : 0
-    : selectedGalleryApprovedCount;
-  const selectedPendingGalleryCount = selectedPhotos.filter((photo) => photo.galleryStatus === 'pending').length;
+  const selectedVisibleAlbumCount = useMemo(
+    () => selectedAlbum ? selectedAlbumScopedPhotos.filter((photo) => photo.visibility === 'visible').length : 0,
+    [selectedAlbum, selectedAlbumScopedPhotos],
+  );
+  const selectedEmbeddableCount = useMemo(
+    () => selectedAlbum
+      ? selectedAlbum.status === 'published' && !selectedAlbum.hasPassword
+        ? selectedVisibleAlbumCount
+        : 0
+      : selectedGalleryApprovedCount,
+    [selectedAlbum, selectedGalleryApprovedCount, selectedVisibleAlbumCount],
+  );
+  const selectedPendingGalleryCount = useMemo(
+    () => selectedPhotos.filter((photo) => photo.galleryStatus === 'pending').length,
+    [selectedPhotos],
+  );
   const previewUrls = useCachedAccountImageUrls(albumPhotos, accessToken, ownerKey);
   const metadataRows = useMemo(
     () => albumPhotos.map((photo) => ({
@@ -932,7 +958,7 @@ function AlbumViewer({
     [albumPhotos, photoDrafts, previewUrls],
   );
 
-  const setMetadataRows = (rows: PhotoMetadataRow[]) => {
+  const setMetadataRows = useCallback((rows: PhotoMetadataRow[]) => {
     setDrafts((current) => ({
       ...current,
       ...Object.fromEntries(rows.map((row) => [row.id, row])),
@@ -944,14 +970,14 @@ function AlbumViewer({
         return row ? { ...item, visibility: row.albumVisibility ?? item.visibility } : item;
       }),
     }));
-  };
+  }, [setAlbumDraft, setDrafts]);
 
-  const setAllVisible = (checked: boolean) => {
+  const setAllVisible = useCallback((checked: boolean) => {
     setSelectedPhotoIds(checked ? new Set(visiblePhotoIds) : new Set());
     setSelectionAnchorId(checked ? visiblePhotoIds[0] ?? null : null);
-  };
+  }, [setSelectedPhotoIds, setSelectionAnchorId, visiblePhotoIds]);
 
-  const togglePhotoSelection = (photoId: string, orderedIds: string[], shiftKey: boolean) => {
+  const togglePhotoSelection = useCallback((photoId: string, orderedIds: string[], shiftKey: boolean) => {
     const nextChecked = !selectedPhotoIds.has(photoId);
     const { next, anchor } = updatePhotoSelection(
       selectedPhotoIds,
@@ -963,31 +989,31 @@ function AlbumViewer({
     );
     setSelectedPhotoIds(next);
     setSelectionAnchorId(anchor);
-  };
+  }, [selectedPhotoIds, selectionAnchorId, setSelectedPhotoIds, setSelectionAnchorId]);
 
-  const setAllAlbumPhotosSelected = (checked: boolean) => {
+  const setAllAlbumPhotosSelected = useCallback((checked: boolean) => {
     setSelectedPhotoIds(checked ? new Set(detailItems.map((photo) => photo.id)) : new Set());
     setSelectionAnchorId(checked ? detailItems[0]?.id ?? null : null);
-  };
+  }, [detailItems, setSelectedPhotoIds, setSelectionAnchorId]);
 
-  const toggleAlbumRail = () => {
+  const toggleAlbumRail = useCallback(() => {
     setAlbumRailOpen((current) => !current);
-  };
+  }, []);
 
-  const toggleOptionsRail = () => {
+  const toggleOptionsRail = useCallback(() => {
     setOptionsRailOpen((current) => !current);
-  };
+  }, []);
 
-  const removePhotoFromAlbum = (photoId: string) => {
+  const removePhotoFromAlbum = useCallback((photoId: string) => {
     setAlbumDraft((current) => ({
       ...current,
       photos: current.photos.filter((item) => item.photoId !== photoId),
       coverPhotoId: current.coverPhotoId === photoId ? '' : current.coverPhotoId,
     }));
     setSelectedPhotoIds((current) => toggleSetValue(current, photoId, false));
-  };
+  }, [setAlbumDraft, setSelectedPhotoIds]);
 
-  const reorderAlbumPhoto = (photoId: string, targetPhotoId: string) => {
+  const reorderAlbumPhoto = useCallback((photoId: string, targetPhotoId: string) => {
     if (photoId === targetPhotoId) return;
     setAlbumDraft((current) => {
       const nextPhotos = [...current.photos];
@@ -999,9 +1025,9 @@ function AlbumViewer({
       nextPhotos.splice(to, 0, moved);
       return { ...current, photos: nextPhotos };
     });
-  };
+  }, [setAlbumDraft]);
 
-  const stageSelectedAlbumPhotoVisibility = (visibility: GalleryAlbumPhotoVisibility) => {
+  const stageSelectedAlbumPhotoVisibility = useCallback((visibility: GalleryAlbumPhotoVisibility) => {
     if (!selectedAlbum || selectedPhotoIds.size === 0) return;
     setAlbumDraft((current) => ({
       ...current,
@@ -1011,7 +1037,95 @@ function AlbumViewer({
           : photo
       )),
     }));
-  };
+  }, [selectedAlbum, selectedPhotoIds, setAlbumDraft]);
+
+  const renderAccountPhotoImage = useCallback((photo: AlbumPhotoView, className: string) => (
+    <AccountPhotoImage photo={photo} accessToken={accessToken} ownerKey={ownerKey} className={className} />
+  ), [accessToken, ownerKey]);
+
+  const albumCardDecorations = useMemo(() => {
+    if (!editing || editorSurface !== 'photos') return undefined;
+    return (photo: AlbumPhotoView, index: number) => (
+      <>
+        <div className="absolute bottom-2 left-2 z-10 border border-line bg-surface/90 px-1.5 py-1 text-[10px] uppercase tracking-wide">
+          {String(index + 1).padStart(2, '0')}
+        </div>
+        {albumDraft.coverPhotoId === photo.id && (
+          <div className="absolute bottom-2 right-2 z-10 border border-line bg-surface/90 px-1.5 py-1 text-[10px] uppercase tracking-wide">
+            Cover
+          </div>
+        )}
+      </>
+    );
+  }, [albumDraft.coverPhotoId, editing, editorSurface]);
+
+  const albumCardActions = useMemo(() => {
+    if (!editing || editorSurface !== 'photos') return undefined;
+    return (photo: AlbumPhotoView) => (
+      <button
+        type="button"
+        onClick={() => removePhotoFromAlbum(photo.id)}
+        className="absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center border border-line bg-surface/90 opacity-100 transition-opacity hover:border-line-strong md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+        aria-label={`Remove ${photo.title}`}
+      >
+        <X size={13} strokeWidth={1.5} />
+      </button>
+    );
+  }, [editing, editorSurface, removePhotoFromAlbum]);
+
+  const albumCardDrag = useMemo(() => {
+    if (!editing || editorSurface !== 'photos') return undefined;
+    return {
+      draggedId: draggedPhotoId,
+      enabled: () => albumPhotos.length > 1,
+      onDragStart: (photo: AlbumPhotoView) => setDraggedPhotoId(photo.id),
+      onDrop: (draggedId: string, target: AlbumPhotoView) => {
+        reorderAlbumPhoto(draggedId, target.id);
+        setDraggedPhotoId(null);
+      },
+      onDragEnd: () => setDraggedPhotoId(null),
+    };
+  }, [albumPhotos.length, draggedPhotoId, editing, editorSurface, reorderAlbumPhoto]);
+
+  const albumSelection = useMemo(() => {
+    if (!editing || !selectedAlbum) return undefined;
+    return {
+      selectedIds: selectedPhotoIds,
+      anchorId: selectionAnchorId,
+      onChange: (ids: Set<string>, anchorId: string | null) => {
+        setSelectedPhotoIds(ids);
+        setSelectionAnchorId(anchorId);
+      },
+      primaryActionLabel: 'Show in public album',
+      secondaryActionLabel: 'Hide from public album',
+      selectedSecondaryCount: selectedVisibleAlbumCount,
+      selectedEmbeddableCount,
+      embedReady,
+      embedSelectedLabel: selectedPhotoIds.size > 0 && selectedEmbeddableCount === 0
+        ? 'Only visible photos in a public album can be embedded'
+        : 'Embed selected',
+      onPrimaryAction: () => stageSelectedAlbumPhotoVisibility('visible'),
+      onSecondaryAction: () => stageSelectedAlbumPhotoVisibility('hidden'),
+      onEmbedSelected: () => onEmbedSelected({
+        photoIds: selectedAlbumScopedPhotos.filter((photo) => photo.visibility === 'visible').map((photo) => photo.id),
+        albumSlug: selectedAlbum.slug,
+        albumTitle: selectedAlbum.title,
+      }),
+    };
+  }, [
+    editing,
+    embedReady,
+    onEmbedSelected,
+    selectedAlbum,
+    selectedAlbumScopedPhotos,
+    selectedEmbeddableCount,
+    selectedPhotoIds,
+    selectedVisibleAlbumCount,
+    selectionAnchorId,
+    setSelectedPhotoIds,
+    setSelectionAnchorId,
+    stageSelectedAlbumPhotoVisibility,
+  ]);
 
   useEffect(() => {
     if (!editing || !selectedAlbum) return undefined;
@@ -1175,29 +1289,7 @@ function AlbumViewer({
               enableReactions={false}
               filterMode="compact"
               emptyMessage="No photos in this album yet."
-              selection={editing ? {
-                selectedIds: selectedPhotoIds,
-                anchorId: selectionAnchorId,
-                onChange: (ids, anchorId) => {
-                  setSelectedPhotoIds(ids);
-                  setSelectionAnchorId(anchorId);
-                },
-                primaryActionLabel: 'Show in public album',
-                secondaryActionLabel: 'Hide from public album',
-                selectedSecondaryCount: selectedVisibleAlbumCount,
-                selectedEmbeddableCount,
-                embedReady,
-                embedSelectedLabel: selectedPhotoIds.size > 0 && selectedEmbeddableCount === 0
-                  ? 'Only visible photos in a public album can be embedded'
-                  : 'Embed selected',
-                onPrimaryAction: () => stageSelectedAlbumPhotoVisibility('visible'),
-                onSecondaryAction: () => stageSelectedAlbumPhotoVisibility('hidden'),
-                onEmbedSelected: () => onEmbedSelected({
-                  photoIds: selectedAlbumScopedPhotos.filter((photo) => photo.visibility === 'visible').map((photo) => photo.id),
-                  albumSlug: selectedAlbum.slug,
-                  albumTitle: selectedAlbum.title,
-                }),
-              } : undefined}
+              selection={albumSelection}
               ownerControls={{
                 visibility: editing || optionsRailOpen ? undefined : {
                   value: editing ? albumDraft.status : selectedAlbum.status,
@@ -1240,41 +1332,10 @@ function AlbumViewer({
               ) : undefined}
               contentSlot={detailsSlot}
               showCardDetails={editing || preferences.showPhotoTitles}
-              cardDecorations={editing && editorSurface === 'photos' ? (photo, index) => (
-                <>
-                  <div className="absolute bottom-2 left-2 z-10 border border-line bg-surface/90 px-1.5 py-1 text-[10px] uppercase tracking-wide">
-                    {String(index + 1).padStart(2, '0')}
-                  </div>
-                  {albumDraft.coverPhotoId === photo.id && (
-                    <div className="absolute bottom-2 right-2 z-10 border border-line bg-surface/90 px-1.5 py-1 text-[10px] uppercase tracking-wide">
-                      Cover
-                    </div>
-                  )}
-                </>
-              ) : undefined}
-              cardActions={editing && editorSurface === 'photos' ? (photo) => (
-                <button
-                  type="button"
-                  onClick={() => removePhotoFromAlbum(photo.id)}
-                  className="absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center border border-line bg-surface/90 opacity-100 transition-opacity hover:border-line-strong md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
-                  aria-label={`Remove ${photo.title}`}
-                >
-                  <X size={13} strokeWidth={1.5} />
-                </button>
-              ) : undefined}
-              cardDrag={editing && editorSurface === 'photos' ? {
-                draggedId: draggedPhotoId,
-                enabled: () => albumPhotos.length > 1,
-                onDragStart: (photo) => setDraggedPhotoId(photo.id),
-                onDrop: (draggedId, target) => {
-                  reorderAlbumPhoto(draggedId, target.id);
-                  setDraggedPhotoId(null);
-                },
-                onDragEnd: () => setDraggedPhotoId(null),
-              } : undefined}
-              renderImage={(photo, className) => (
-                <AccountPhotoImage photo={photo} accessToken={accessToken} ownerKey={ownerKey} className={className} />
-              )}
+              cardDecorations={albumCardDecorations}
+              cardActions={albumCardActions}
+              cardDrag={albumCardDrag}
+              renderImage={renderAccountPhotoImage}
               renderInfo={(photo, { close }) => (
                 <AccountLightboxInfo
                   photo={photo}

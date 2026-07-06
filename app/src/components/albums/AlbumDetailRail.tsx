@@ -35,17 +35,21 @@ export function AlbumDetailRail({
         <Arrow size={13} strokeWidth={1.5} />
       </button>
 
-      {open ? (
-        <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-gutter:stable]">
-          {children}
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 items-start justify-center px-1 py-4">
-          <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] uppercase tracking-[0.22em] text-muted">
-            {label}
-          </span>
-        </div>
-      )}
+      <div
+        aria-hidden={!open}
+        className={open ? 'min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-gutter:stable]' : 'hidden'}
+      >
+        {children}
+      </div>
+
+      <div
+        aria-hidden={open}
+        className={open ? 'hidden' : 'flex min-h-0 flex-1 items-start justify-center px-1 py-4'}
+      >
+        <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] uppercase tracking-[0.22em] text-muted">
+          {label}
+        </span>
+      </div>
     </aside>
   );
 }

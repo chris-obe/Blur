@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  memo,
   useMemo,
   useRef,
   useState,
@@ -241,34 +242,34 @@ export function GallerySurface<T extends GallerySurfaceItem>({
   const addTag = (tag: string) => setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]));
   const removeTag = (tag: string) => setTags((prev) => prev.filter((item) => item !== tag));
 
-  const setAllVisible = () => {
+  const setAllVisible = useCallback(() => {
     if (!selection) return;
     selection.onChange(allSelected ? new Set() : new Set(visibleIds), allSelected ? null : visibleIds[0] ?? null);
-  };
+  }, [allSelected, selection, visibleIds]);
 
-  const toggleSelection = (id: string, shiftKey: boolean) => {
+  const toggleSelection = useCallback((id: string, event: ReactMouseEvent<HTMLButtonElement>) => {
     if (!selection) return;
     const checked = !selection.selectedIds.has(id);
     selection.onChange(
-      updateSelectionRange(selection.selectedIds, visibleIds, id, checked, shiftKey, selection.anchorId),
-      shiftKey && selection.anchorId ? selection.anchorId : id,
+      updateSelectionRange(selection.selectedIds, visibleIds, id, checked, event.shiftKey, selection.anchorId),
+      event.shiftKey && selection.anchorId ? selection.anchorId : id,
     );
-  };
+  }, [selection, visibleIds]);
 
-  const openPhoto = (item: T, shiftKey = false) => {
-    if (selection && shiftKey) {
-      toggleSelection(item.id, true);
+  const openPhoto = useCallback((item: T, event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (selection && event.shiftKey) {
+      toggleSelection(item.id, event);
       return;
     }
     onOpenPhoto?.(item);
     const index = filtered.findIndex((entry) => entry.id === item.id);
     setView({ list: filtered.map(toEntry), index: Math.max(0, index) });
-  };
+  }, [filtered, onOpenPhoto, selection, toggleSelection]);
 
-  const closeView = () => {
+  const closeView = useCallback(() => {
     setView(null);
     onClosePhoto?.();
-  };
+  }, [onClosePhoto]);
 
   return (
     <div className="flex min-h-0 flex-col">
@@ -330,8 +331,8 @@ export function GallerySurface<T extends GallerySurfaceItem>({
               cardDrag={cardDrag}
               registerAnchor={registerAnchor}
               renderImage={renderImage}
-              onOpen={(event) => openPhoto(item, event.shiftKey)}
-              onSelect={(event) => toggleSelection(item.id, event.shiftKey)}
+              onOpen={openPhoto}
+              onSelect={toggleSelection}
             />
           ))}
         </div>
@@ -740,22 +741,7 @@ function formatFilterNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
 }
 
-function GallerySurfaceCard<T extends GallerySurfaceItem>({
-  item,
-  index,
-  hidden,
-  selected,
-  selectable,
-  enableReactions,
-  showDetails,
-  cardDecorations,
-  cardActions,
-  cardDrag,
-  registerAnchor,
-  renderImage,
-  onOpen,
-  onSelect,
-}: {
+type GallerySurfaceCardProps<T extends GallerySurfaceItem> = {
   item: T;
   index: number;
   hidden?: boolean;
@@ -774,9 +760,26 @@ function GallerySurfaceCard<T extends GallerySurfaceItem>({
   };
   registerAnchor: (id: string, el: HTMLElement | null) => void;
   renderImage?: (item: T, className: string) => ReactNode;
-  onOpen: (event: ReactMouseEvent<HTMLButtonElement>) => void;
-  onSelect: (event: ReactMouseEvent<HTMLButtonElement>) => void;
-}) {
+  onOpen: (item: T, event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onSelect: (id: string, event: ReactMouseEvent<HTMLButtonElement>) => void;
+};
+
+function GallerySurfaceCardInner<T extends GallerySurfaceItem>({
+  item,
+  index,
+  hidden,
+  selected,
+  selectable,
+  enableReactions,
+  showDetails,
+  cardDecorations,
+  cardActions,
+  cardDrag,
+  registerAnchor,
+  renderImage,
+  onOpen,
+  onSelect,
+}: GallerySurfaceCardProps<T>) {
   const draggable = !!cardDrag && (cardDrag.enabled ? cardDrag.enabled(item) : true);
   const dragging = cardDrag?.draggedId === item.id;
 
@@ -805,7 +808,7 @@ function GallerySurfaceCard<T extends GallerySurfaceItem>({
       }}
       onDragEnd={() => cardDrag?.onDragEnd()}
     >
-      <button type="button" onClick={onOpen} className="block w-full text-left">
+      <button type="button" onClick={(event) => onOpen(item, event)} className="block w-full text-left">
         <div
           ref={(el) => registerAnchor(item.id, el)}
           className="aspect-square w-full overflow-hidden bg-faint"
@@ -832,7 +835,7 @@ function GallerySurfaceCard<T extends GallerySurfaceItem>({
           type="button"
           aria-label={`Select ${item.title}`}
           title={`Select ${item.title}`}
-          onClick={onSelect}
+          onClick={(event) => onSelect(item.id, event)}
           className={[
             'absolute left-2 top-2 z-10 inline-flex h-8 min-w-8 items-center justify-center border px-2 text-[10px] uppercase tracking-[0.18em] backdrop-blur-sm transition-opacity',
             selected ? 'border-fg bg-fg text-bg' : 'border-line bg-surface/90 text-fg opacity-0 hover:border-line-strong group-hover:opacity-100 group-focus-within:opacity-100',
@@ -860,7 +863,7 @@ function GallerySurfaceCard<T extends GallerySurfaceItem>({
       )}
 
       {showDetails && (
-        <button type="button" onClick={onOpen} className="flex flex-col gap-1 border-t border-line px-3 py-2 text-left">
+        <button type="button" onClick={(event) => onOpen(item, event)} className="flex flex-col gap-1 border-t border-line px-3 py-2 text-left">
           <div className="flex items-baseline justify-between gap-2">
             <span className="truncate text-xs font-bold">{item.title}</span>
             <span className="label shrink-0">f/{item.aperture}</span>
@@ -874,6 +877,8 @@ function GallerySurfaceCard<T extends GallerySurfaceItem>({
     </div>
   );
 }
+
+const GallerySurfaceCard = memo(GallerySurfaceCardInner) as typeof GallerySurfaceCardInner;
 
 function GalleryVisibilityDropdown({
   value,
