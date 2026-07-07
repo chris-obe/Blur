@@ -222,8 +222,9 @@ export async function storePhotoThumbnail(env: GalleryEnv, row: GalleryRow, thum
   await env.GALLERY_BUCKET.put(thumbObjectKey, thumb.stream(), {
     httpMetadata: { contentType },
   });
-  await env.GALLERY_DB.prepare('UPDATE gallery_photos SET thumb_object_key = ? WHERE id = ?')
-    .bind(thumbObjectKey, row.id)
+  const updatedAt = new Date().toISOString();
+  await env.GALLERY_DB.prepare('UPDATE gallery_photos SET thumb_object_key = ?, updated_at = ? WHERE id = ?')
+    .bind(thumbObjectKey, updatedAt, row.id)
     .run();
   return { thumbObjectKey };
 }

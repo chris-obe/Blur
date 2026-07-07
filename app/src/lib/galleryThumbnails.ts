@@ -17,7 +17,7 @@ export interface ThumbnailRegenerationProgress {
 type ProgressCallback = (progress: ThumbnailRegenerationProgress) => void;
 
 export function missingThumbnailPhotos<T extends { hasThumbnail?: boolean }>(photos: T[]): T[] {
-  return photos.filter((photo) => !photo.hasThumbnail);
+  return photos.filter((photo) => photo.hasThumbnail === false);
 }
 
 export async function regenerateAdminThumbnail(
