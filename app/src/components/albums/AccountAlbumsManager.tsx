@@ -14,7 +14,7 @@ import {
 } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronRight, Eye, FolderOpen, Grid3X3, ImagePlus, Plus, Rows3, Save, Settings2, X } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Eye, FolderOpen, Grid3X3, ImagePlus, Plus, Rows3, Save, Send, Settings2, X } from 'lucide-react';
 import { userTokenParams } from '../../auth/config';
 import {
   createAccountGalleryAlbum,
@@ -59,6 +59,7 @@ import { EmbedCodeDialog } from '../embed/EmbedCodeDialog';
 import { PhotoLightbox } from '../lightbox/PhotoLightbox';
 import { Button } from '../ui/Button';
 import { ErrorBanner } from '../ui/ErrorBanner';
+import { Modal } from '../ui/Modal';
 import { AccountLightboxInfo } from './AccountLightboxInfo';
 import { AccountPhotoImage } from './AccountPhotoImage';
 import { ActionIconButton, AlbumActionBar, SelectionPill } from './AlbumActionBar';
@@ -106,6 +107,11 @@ type EmbedRequest =
   | { mode: 'selection'; photoIds: string[]; albumSlug?: string; albumTitle?: string }
   | { mode: 'album'; albumSlug: string; albumTitle: string };
 
+interface PublicGallerySubmissionRequest {
+  ids: string[];
+  label: string;
+}
+
 export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -130,6 +136,7 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
   const [viewPhotoId, setViewPhotoId] = useState<string | null>(null);
   const [embedTemplate, setEmbedTemplate] = useState<EmbedTemplate | null>(null);
   const [embedRequest, setEmbedRequest] = useState<EmbedRequest | null>(null);
+  const [publicGallerySubmission, setPublicGallerySubmission] = useState<PublicGallerySubmissionRequest | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<ImageProcessingProgress | null>(null);
@@ -403,13 +410,24 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
   };
 
   const submitSelectedToGallery = async () => {
+    const ids = [...selectedPhotoIds];
+    if (ids.length === 0) return;
+    setPublicGallerySubmission({
+      ids,
+      label: `${ids.length} selected photo${ids.length === 1 ? '' : 's'}`,
+    });
+  };
+
+  const confirmPublicGallerySubmission = async () => {
+    if (!publicGallerySubmission) return;
     setBusy(true);
     setError(null);
     try {
       const token = await getToken();
       setAccessToken(token);
-      for (const id of selectedPhotoIds) await publishAccountGalleryPhoto(id, token);
+      for (const id of publicGallerySubmission.ids) await publishAccountGalleryPhoto(id, token);
       setSelectedPhotoIds(new Set());
+      setPublicGallerySubmission(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Publish request failed');
@@ -435,18 +453,11 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
   };
 
   const publishOne = async (photoId: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const token = await getToken();
-      setAccessToken(token);
-      await publishAccountGalleryPhoto(photoId, token);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Publish request failed');
-    } finally {
-      setBusy(false);
-    }
+    const photo = photosById.get(photoId);
+    setPublicGallerySubmission({
+      ids: [photoId],
+      label: photo?.title || 'this photo',
+    });
   };
 
   const regenerateAccountPhotoThumbnails = async (photosToFix: AdminGalleryPhoto[]) => {
@@ -635,6 +646,29 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
             />
           )}
         />
+      )}
+
+      {publicGallerySubmission && (
+        <Modal onClose={() => setPublicGallerySubmission(null)} labelledBy="public-gallery-submit-title">
+          <div className="space-y-4 p-5">
+            <div className="flex gap-3">
+              <AlertTriangle size={18} strokeWidth={1.5} className="mt-0.5 shrink-0" />
+              <div>
+                <h2 id="public-gallery-submit-title" className="text-base font-bold tracking-tight">Submit to public gallery?</h2>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  {publicGallerySubmission.label} will be sent to the blur gallery moderation queue. If approved, anyone visiting the site can view it.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button onClick={() => setPublicGallerySubmission(null)} disabled={busy}>Cancel</Button>
+              <Button variant="solid" onClick={() => void confirmPublicGallerySubmission()} disabled={busy}>
+                <Send size={14} strokeWidth={1.5} />
+                {busy ? 'Submitting' : 'Submit'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {embedTemplate && embedRequest && (

@@ -1,20 +1,29 @@
 import { useAuth0 } from '@auth0/auth0-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Send } from 'lucide-react';
 import { userTokenParams } from '../../auth/config';
 import {
   ApiError,
   getAccountGalleryAlbum,
   getGalleryAlbum,
   getPublicEmbedTemplate,
+  publishAccountGalleryPhoto,
   updateAccountGalleryAlbum,
+  uploadAccountGalleryPhoto,
   type EmbedTemplate,
   type GalleryAlbum,
   type GalleryAlbumPhotoVisibility,
   type GalleryAlbumStatus,
 } from '../../lib/galleryApi';
 import { useClearCachedAccountImagesOnOwnerChange } from '../../lib/accountImageCache';
-import { suggestGalleryMetadata } from '../../lib/galleryMetadata';
+import { suggestGalleryMetadata, type GalleryMetadataSuggestion } from '../../lib/galleryMetadata';
+import {
+  GALLERY_UPLOAD_MAX_BYTES,
+  GALLERY_UPLOAD_MAX_LONG_EDGE,
+  processGalleryUploadImage,
+} from '../../lib/imageProcessing';
+import { DEFAULT_SUBJECT_DISTANCE_PRESET_ID } from '../../lib/subjectDistance';
 import type { GalleryItem, ViewEntry } from '../../lib/types';
 import { usePublicGalleryPhotos } from '../../hooks/usePublicGalleryPhotos';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
@@ -22,6 +31,7 @@ import { useCatalog } from '../../store/CatalogProvider';
 import { useReactions } from '../../store/ReactionsProvider';
 import { CachedAccountImage } from './CachedAccountImage';
 import { EmbedCodeDialog } from '../embed/EmbedCodeDialog';
+import { normalizedFormatId } from './metadata/photoMetadataModel';
 import { PhotoLightbox } from '../lightbox/PhotoLightbox';
 import { Button } from '../ui/Button';
 import { GallerySurface } from './GallerySurface';
@@ -32,6 +42,12 @@ type EmbedRequest =
   | { mode: 'selection'; photoIds: string[]; albumSlug?: string; albumTitle?: string }
   | { mode: 'album'; albumSlug: string; albumTitle: string };
 
+interface UploadPreviewState {
+  entry: ViewEntry;
+  file: File;
+  metadata: GalleryMetadataSuggestion;
+}
+
 interface GalleryPageProps {
   albumSlug?: string;
   initialPhotoId?: string;
@@ -40,7 +56,7 @@ interface GalleryPageProps {
 
 export function GalleryPage({ albumSlug, initialPhotoId, closePath }: GalleryPageProps = {}) {
   const navigate = useNavigate();
-  const { getAccessTokenSilently, isAuthenticated, user } = useAuth0();
+  const { getAccessTokenSilently, isAuthenticated, loginWithRedirect, user } = useAuth0();
   const { cameras, lenses } = useCatalog();
   const { registerCounts } = useReactions();
   const publicGallery = usePublicGalleryPhotos({ enabled: !albumSlug });
@@ -59,7 +75,9 @@ export function GalleryPage({ albumSlug, initialPhotoId, closePath }: GalleryPag
   const [albumPasswordAttempt, setAlbumPasswordAttempt] = useState<{ value: string; nonce: number } | null>(null);
   const [albumPasswordRequired, setAlbumPasswordRequired] = useState(false);
   const [albumPasswordMessage, setAlbumPasswordMessage] = useState('');
-  const [uploadPreview, setUploadPreview] = useState<ViewEntry | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<UploadPreviewState | null>(null);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadPublishLabel, setUploadPublishLabel] = useState('');
   const objectUrl = useRef<string | null>(null);
 
   useClearCachedAccountImagesOnOwnerChange(ownerKey);
@@ -202,26 +220,90 @@ export function GalleryPage({ albumSlug, initialPhotoId, closePath }: GalleryPag
       const preview = URL.createObjectURL(file);
       objectUrl.current = preview;
       setUploadPreview({
-        id: 'upload',
-        title: file.name,
-        metaLine: `${metadata.camera} · ${metadata.lens} · shot f/${metadata.aperture}`,
-        src: preview,
-        camera: metadata.camera,
-        lens: metadata.lens,
-        formatId: metadata.formatId,
-        format: metadata.format,
-        focal: metadata.focal,
-        aperture: metadata.aperture,
-        shutterSpeed: metadata.shutterSpeed,
-        iso: metadata.iso,
-        capturedAt: metadata.capturedAt,
-        subjectPreset: undefined,
-        subjectWidthM: undefined,
-        guessed: metadata.source.exif.guessedFormat && metadata.cameraConfidence === 'none',
-        morph: false,
+        file,
+        metadata,
+        entry: {
+          id: 'upload',
+          title: file.name,
+          metaLine: `${metadata.camera} · ${metadata.lens} · shot f/${metadata.aperture}`,
+          src: preview,
+          camera: metadata.camera,
+          lens: metadata.lens,
+          formatId: metadata.formatId,
+          format: metadata.format,
+          focal: metadata.focal,
+          aperture: metadata.aperture,
+          shutterSpeed: metadata.shutterSpeed,
+          iso: metadata.iso,
+          capturedAt: metadata.capturedAt,
+          subjectPreset: undefined,
+          subjectWidthM: undefined,
+          guessed: metadata.source.exif.guessedFormat && metadata.cameraConfidence === 'none',
+          morph: false,
+        },
       });
+      setUploadError('');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const uploadAndSubmitPreview = async () => {
+    if (!uploadPreview) return;
+    if (!isAuthenticated) {
+      await loginWithRedirect({ appState: { returnTo: window.location.pathname } });
+      return;
+    }
+
+    setBusy(true);
+    setUploadError('');
+    setUploadPublishLabel('Preparing image');
+    try {
+      const token = await getAccessTokenSilently({ authorizationParams: userTokenParams });
+      const processed = await processGalleryUploadImage(uploadPreview.file, (progress) => setUploadPublishLabel(progress.label));
+      const { metadata } = uploadPreview;
+      const form = new FormData();
+      form.set('id', `photo-${crypto.randomUUID()}`);
+      form.set('file', processed.file);
+      if (processed.thumbFile) form.set('thumb', processed.thumbFile);
+      form.set('title', metadata.title || uploadPreview.file.name);
+      form.set('camera', metadata.camera);
+      form.set('cameraCatalogId', metadata.cameraCatalogId ?? '');
+      form.set('lens', metadata.lens);
+      form.set('lensCatalogId', metadata.lensCatalogId ?? '');
+      form.set('formatId', normalizedFormatId(metadata.formatId));
+      form.set('focal', String(metadata.focal));
+      form.set('aperture', String(metadata.aperture));
+      form.set('subjectPreset', DEFAULT_SUBJECT_DISTANCE_PRESET_ID);
+      form.set('shutterSpeed', metadata.shutterSpeed ?? '');
+      form.set('iso', metadata.iso != null ? String(metadata.iso) : '');
+      form.set('capturedAt', metadata.capturedAt ?? '');
+      form.set('width', String(processed.width));
+      form.set('height', String(processed.height));
+      form.set('metadataSource', JSON.stringify({
+        ...metadata.source,
+        processing: {
+          originalBytes: processed.originalBytes,
+          processedBytes: processed.processedBytes,
+          width: processed.width,
+          height: processed.height,
+          contentType: processed.contentType,
+          maxLongEdge: GALLERY_UPLOAD_MAX_LONG_EDGE,
+          maxBytes: GALLERY_UPLOAD_MAX_BYTES,
+        },
+      }));
+
+      setUploadPublishLabel('Uploading');
+      const uploaded = await uploadAccountGalleryPhoto(form, token);
+      setUploadPublishLabel('Submitting');
+      await publishAccountGalleryPhoto(uploaded.id, token);
+      setUploadPreview(null);
+      revokeUploadPreview();
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Could not submit this photo.');
+    } finally {
+      setBusy(false);
+      setUploadPublishLabel('');
     }
   };
 
@@ -393,14 +475,32 @@ export function GalleryPage({ albumSlug, initialPhotoId, closePath }: GalleryPag
 
       {uploadPreview && (
         <PhotoLightbox
-          entries={[uploadPreview]}
+          entries={[uploadPreview.entry]}
           index={0}
           onIndex={() => undefined}
           onClose={() => {
             setUploadPreview(null);
+            setUploadError('');
             revokeUploadPreview();
           }}
-          renderInfo={(entry) => <LightboxInfo entry={entry} enableReactions={false} />}
+          renderInfo={(entry) => (
+            <LightboxInfo
+              entry={entry}
+              enableReactions={false}
+              footerActions={(
+                <div className="space-y-2">
+                  {uploadError && <div className="border border-line bg-faint px-3 py-2 text-xs text-muted">{uploadError}</div>}
+                  <Button variant="solid" className="w-full" onClick={() => void uploadAndSubmitPreview()} disabled={busy}>
+                    <Send size={14} strokeWidth={1.5} />
+                    {busy ? uploadPublishLabel || 'Submitting' : isAuthenticated ? 'Upload & submit to gallery' : 'Sign in to submit'}
+                  </Button>
+                  <div className="text-[11px] leading-relaxed text-muted">
+                    Submits this photo to the public gallery queue. If approved, it can be viewed by anyone visiting blur.
+                  </div>
+                </div>
+              )}
+            />
+          )}
         />
       )}
 

@@ -37,7 +37,7 @@ export function UploadBox({ onFile, busy }: Props) {
         ].join(' ')}
       >
         <Upload size={15} strokeWidth={1.5} className="text-muted" />
-        {busy ? 'Reading EXIF…' : 'Drop an image to match its look — or click to upload'}
+        {busy ? 'Reading EXIF…' : 'Drop or click to preview, match, or submit to the public gallery'}
       </button>
       <input
         ref={inputRef}

@@ -45,7 +45,7 @@ interface Props {
   onError: (message: string) => void;
 }
 
-const STATUS_ORDER: GalleryModerationStatus[] = ['pending', 'approved', 'not_submitted', 'rejected'];
+const STATUS_ORDER: GalleryModerationStatus[] = ['pending', 'approved', 'rejected'];
 
 interface UploadQueueItem {
   id: string;

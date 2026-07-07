@@ -33,7 +33,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 
   const url = new URL(request.url);
   const status = url.searchParams.get('status');
-  const includeStatus = status && ['draft', 'pending', 'approved', 'rejected', 'not_submitted'].includes(status);
+  const includeStatus = !!status && ['draft', 'pending', 'approved', 'rejected', 'not_submitted'].includes(status);
   const queryStatus = includeStatus ? legacyStatusToGalleryStatus(status) : null;
   const { limit, cursor } = pageParamsFromUrl(url);
 
@@ -42,6 +42,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   if (includeStatus && queryStatus) {
     conditions.push('gallery_status = ?');
     binds.push(queryStatus);
+  } else {
+    conditions.push(`gallery_status != 'not_submitted'`);
   }
   if (cursor && cursor.length === 2) {
     conditions.push('(updated_at, id) < (?, ?)');

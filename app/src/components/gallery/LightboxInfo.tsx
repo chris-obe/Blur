@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { GitCompare } from 'lucide-react';
 import { useKit } from '../../store/KitProvider';
 import { useCompare, nextSystemId } from '../../store/CompareProvider';
@@ -6,7 +7,15 @@ import { ReactionBar } from '../ui/ReactionBar';
 import { PhotoOpticsPanel } from './PhotoOpticsPanel';
 import type { ViewEntry } from '../../lib/types';
 
-export function LightboxInfo({ entry, enableReactions = true }: { entry: ViewEntry; enableReactions?: boolean }) {
+export function LightboxInfo({
+  entry,
+  enableReactions = true,
+  footerActions,
+}: {
+  entry: ViewEntry;
+  enableReactions?: boolean;
+  footerActions?: ReactNode;
+}) {
   const { cameras, lenses } = useKit();
   const { add: addToCompare } = useCompare();
   const navigate = useNavigate();
@@ -53,6 +62,7 @@ export function LightboxInfo({ entry, enableReactions = true }: { entry: ViewEnt
           </button>
         )}
       />
+      {footerActions}
     </div>
   );
 }
