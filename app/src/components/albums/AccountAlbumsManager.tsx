@@ -177,6 +177,7 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
       .map((photo) => photo.id),
     [photos, selectedPhotoIds],
   );
+  const missingAccountThumbnails = useMemo(() => missingThumbnailPhotos(photos), [photos]);
   const embedReady = !!embedTemplate;
 
   usePruneCachedAccountImages(ownerKey, photos);
@@ -286,10 +287,7 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
 
   const startNewAlbum = () => {
     selectAlbum(null);
-    if (mode === 'page') {
-      navigate('/albums/new?mode=edit');
-      return;
-    }
+    navigate('/albums/new?mode=edit');
   };
 
   const uploadFiles = async (files: FileList | File[] | null) => {
@@ -505,7 +503,7 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
     );
   }
 
-  const manager = mode === 'settings' || isNewRoute ? (
+  const manager = isNewRoute ? (
     <AlbumBuilder
       bounded={mode === 'page'}
       albums={albums}
@@ -613,7 +611,69 @@ export function AccountAlbumsManager({ mode, routeAlbumSlug }: Props) {
       {mode === 'settings' && (
         <>
           <AlbumPreferencesPanel preferences={preferences} onChange={setPreferences} />
-          {manager}
+          <AlbumThumbnailMaintenance
+            photoCount={photos.length}
+            missingCount={missingAccountThumbnails.length}
+            busy={busy || loading}
+            thumbnailProgress={thumbnailProgress}
+            onRegenerateMissing={() => regenerateAccountPhotoThumbnails(missingAccountThumbnails)}
+            onRegenerateAll={() => regenerateAccountPhotoThumbnails(photos)}
+          />
+          <div className="h-[min(72rem,calc(100vh-17rem))] min-h-[42rem]">
+            <AlbumViewer
+              albums={albums}
+              photos={photos}
+              availablePhotos={availablePhotos}
+              albumPhotos={albumPhotos}
+              selectedAlbum={selectedAlbum}
+              isNewRoute={false}
+              detailMode={detailMode}
+              pageSurface={pageSurface}
+              preferences={preferences}
+              selectedPhotoIds={selectedPhotoIds}
+              selectionAnchorId={selectionAnchorId}
+              selectedGalleryApprovedCount={selectedApprovedPhotoIds.length}
+              albumDraft={albumDraft}
+              photoDrafts={photoDrafts}
+              catalog={{ cameras, lenses }}
+              accessToken={accessToken}
+              ownerKey={ownerKey}
+              fileInputRef={fileInputRef}
+              loading={loading}
+              busy={busy}
+              progress={progress}
+              thumbnailProgress={thumbnailProgress}
+              embedReady={embedReady}
+              error={error}
+              manager={null}
+              selectAlbum={selectAlbum}
+              startNewAlbum={startNewAlbum}
+              reload={load}
+              setDetailMode={(nextMode) => setSearchParams(nextMode === 'edit' ? { mode: 'edit' } : {})}
+              setPageSurface={setPageSurface}
+              setSelectedPhotoIds={setSelectedPhotoIds}
+              setSelectionAnchorId={setSelectionAnchorId}
+              setAlbumDraft={setAlbumDraft}
+              setDrafts={setPhotoDrafts}
+              setViewPhotoId={setViewPhotoId}
+              uploadFiles={uploadFiles}
+              saveAlbum={saveAlbum}
+              submitSelectedToGallery={submitSelectedToGallery}
+              withdrawSelectedFromGallery={withdrawSelectedFromGallery}
+              publishOne={publishOne}
+              regenerateThumbnails={regenerateAccountPhotoThumbnails}
+              patchAlbum={patchAlbum}
+              onEmbedSelected={openSelectionEmbed}
+              onEmbedPhoto={(photo, albumSlug) => setEmbedRequest({
+                mode: 'photo',
+                photo: { id: photo.id, title: photo.title },
+                albumSlug,
+              })}
+              onEmbedAlbum={openAlbumEmbed}
+              goToAlbums={() => selectAlbum(null)}
+              openAlbum={selectAlbum}
+            />
+          </div>
         </>
       )}
 
@@ -704,6 +764,66 @@ function AlbumViewModeSwitch({
         <Settings2 size={14} strokeWidth={1.5} />
       </ActionIconButton>
     </div>
+  );
+}
+
+function AlbumThumbnailMaintenance({
+  photoCount,
+  missingCount,
+  busy,
+  thumbnailProgress,
+  onRegenerateMissing,
+  onRegenerateAll,
+}: {
+  photoCount: number;
+  missingCount: number;
+  busy: boolean;
+  thumbnailProgress: ThumbnailRegenerationProgress | null;
+  onRegenerateMissing: () => void;
+  onRegenerateAll: () => void;
+}) {
+  return (
+    <section className="border border-line p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-1 flex items-center gap-2 text-sm font-bold">
+            <ImagePlus size={15} strokeWidth={1.5} />
+            Thumbnail maintenance
+          </div>
+          <div className="text-xs text-muted">
+            {missingCount > 0
+              ? `${missingCount} of ${photoCount} uploaded photos are missing thumbnail metadata.`
+              : `${photoCount} uploaded photo${photoCount === 1 ? '' : 's'} have thumbnail metadata. Regenerate all if cards look stale or blank.`}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {missingCount > 0 && (
+            <Button type="button" onClick={onRegenerateMissing} disabled={busy || !!thumbnailProgress}>
+              <ImagePlus size={14} strokeWidth={1.5} />
+              Generate missing
+            </Button>
+          )}
+          <Button type="button" variant="solid" onClick={onRegenerateAll} disabled={busy || !!thumbnailProgress || photoCount === 0}>
+            <ImagePlus size={14} strokeWidth={1.5} />
+            Regenerate all
+          </Button>
+        </div>
+      </div>
+      {thumbnailProgress && (
+        <div className="mt-3 text-xs">
+          <div className="mb-1 flex justify-between gap-3 text-muted">
+            <span>{thumbnailProgress.label}</span>
+            <span>{thumbnailProgress.current}/{thumbnailProgress.total}</span>
+          </div>
+          <div className="h-1.5 w-full bg-line">
+            <div
+              className="h-full bg-fg transition-all"
+              style={{ width: `${Math.round((thumbnailProgress.current / thumbnailProgress.total) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

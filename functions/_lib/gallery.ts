@@ -138,14 +138,21 @@ export async function imageResponse(
   options: { publicCache?: boolean; forceNoStore?: boolean; size?: 'thumb' | 'full' } = {},
 ) {
   // Grids ask for ?size=thumb; legacy rows without a thumb serve the full image.
+  // Stale D1 thumb pointers should also degrade to the full object instead of
+  // blanking album grids.
   const useThumb = options.size === 'thumb' && !!row.thumb_object_key;
-  const object = await env.GALLERY_BUCKET.get(useThumb ? (row.thumb_object_key as string) : row.object_key);
+  let object = await env.GALLERY_BUCKET.get(useThumb ? (row.thumb_object_key as string) : row.object_key);
+  let servingThumb = useThumb;
+  if (!object && useThumb) {
+    object = await env.GALLERY_BUCKET.get(row.object_key);
+    servingThumb = false;
+  }
   if (!object) return json({ error: 'image not found' }, { status: 404 });
 
   const headers = new Headers();
   headers.set(
     'content-type',
-    (useThumb ? object.httpMetadata?.contentType : row.content_type || object.httpMetadata?.contentType) || 'application/octet-stream',
+    (servingThumb ? object.httpMetadata?.contentType : row.content_type || object.httpMetadata?.contentType) || 'application/octet-stream',
   );
   const publiclyCacheable = options.publicCache || galleryStatusFromRow(row) === 'approved';
   // Approved image bytes effectively never change for a given photo id (there
