@@ -13,7 +13,7 @@ export interface NavItemData {
 
 // Primary destinations (top of the sidebar / left of the bottom bar).
 export const PRIMARY_NAV: NavItemData[] = [
-  { to: '/', label: 'Gallery', icon: Images, end: true, featureFlag: 'gallery' },
+  { to: '/gallery', label: 'Gallery', icon: Images, featureFlag: 'gallery' },
   { to: '/albums', label: 'Albums', icon: FolderOpen, featureFlag: 'albums' },
   { to: '/compare', label: 'Compare', icon: GitCompare, featureFlag: 'compare' },
   { to: '/kit', label: 'My Kit', icon: Aperture, featureFlag: 'kit' },

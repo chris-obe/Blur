@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { AppShell } from './components/shell/AppShell';
 import { GalleryPage } from './components/gallery/GalleryPage';
 import { GalleryRoute, AlbumGalleryRoute } from './pages/Gallery';
+import { RootGate } from './pages/RootGate';
 import { Stub } from './pages/Stub';
 import { EmbedPhoto } from './pages/EmbedPhoto';
 import { EmbedGallery } from './pages/EmbedGallery';
@@ -34,8 +35,9 @@ function Deferred({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<RootGate />} />
       <Route
-        path="/"
+        path="/gallery"
         element={
           <AppShell title="Gallery">
             <FeatureFlagGate flag="gallery">
