@@ -19,31 +19,36 @@ type Line = 'checking' | 'found' | 'welcome' | 'loading';
 export function Splash({ status, name, onFinish }: Props) {
   const reduce = useReducedMotion();
   const [line, setLine] = useState<Line>('checking');
-  const started = useRef(false);
+  const onFinishRef = useRef(onFinish);
 
   useEffect(() => {
-    if (status === 'pending' || started.current) return;
-    started.current = true;
+    onFinishRef.current = onFinish;
+  }, [onFinish]);
+
+  useEffect(() => {
+    if (status === 'pending') return;
 
     if (reduce) {
-      onFinish();
+      onFinishRef.current();
       return;
     }
+
+    const finish = () => onFinishRef.current();
 
     if (status === 'authed') {
       const timers = [
         window.setTimeout(() => setLine('found'), 260),
         window.setTimeout(() => setLine('welcome'), 820),
         window.setTimeout(() => setLine('loading'), 1640),
-        window.setTimeout(onFinish, 2320),
+        window.setTimeout(finish, 2320),
       ];
       return () => timers.forEach(clearTimeout);
     }
 
     // Anonymous: hold long enough that the focus-in reads, then hand off.
-    const timer = window.setTimeout(onFinish, 780);
+    const timer = window.setTimeout(finish, 780);
     return () => window.clearTimeout(timer);
-  }, [status, reduce, onFinish]);
+  }, [status, reduce]);
 
   const greeting = name ? `Welcome back, ${name}.` : 'Welcome back.';
   const message: Record<Line, string> = {
