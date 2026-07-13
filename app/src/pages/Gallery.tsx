@@ -3,7 +3,7 @@ import { GalleryPage } from '../components/gallery/GalleryPage';
 
 export function GalleryRoute() {
   const { photoId } = useParams();
-  return <GalleryPage initialPhotoId={photoId} closePath="/" />;
+  return <GalleryPage initialPhotoId={photoId} closePath="/gallery" />;
 }
 
 export function AlbumGalleryRoute() {
